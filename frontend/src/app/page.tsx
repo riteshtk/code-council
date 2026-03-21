@@ -199,10 +199,20 @@ export default function HomePage() {
 
   // Derive stats
   const totalAnalyses = runs.length;
-  const avgConsensus = runs.length > 0
-    ? Math.round(runs.filter((r) => r.status === "completed").length / runs.length * 100)
-    : 0;
+  const completedRuns = runs.filter((r) => r.status === "completed");
   const totalSpend = runs.reduce((s, r) => s + r.total_cost, 0);
+  const avgCost = totalAnalyses > 0 ? totalSpend / totalAnalyses : 0;
+  const totalFindings = runs.reduce((s, r) => s + ((r as any).findings_count || 0), 0);
+
+  function formatDuration(start?: string, end?: string): string {
+    if (!start || !end) return "--";
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (ms < 0) return "--";
+    const secs = Math.floor(ms / 1000);
+    const mins = Math.floor(secs / 60);
+    const remainSecs = secs % 60;
+    return `${mins}m ${remainSecs}s`;
+  }
 
   // Parse repo display name
   function repoDisplay(run: RunSummary) {
@@ -336,24 +346,30 @@ export default function HomePage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-4 gap-3 mb-8">
         <div className="card-premium p-4 text-center">
-          <div className="text-[28px] font-bold text-[var(--cc-accent)]">
+          <div className="text-[28px] font-bold font-mono text-[var(--cc-accent)]">
             {runsLoading ? "-" : totalAnalyses}
           </div>
-          <div className="text-xs text-[var(--cc-text-muted)] mt-1">Total Analyses</div>
+          <div className="text-xs text-[var(--cc-text-muted)] mt-1">Total Runs</div>
         </div>
         <div className="card-premium p-4 text-center">
-          <div className="text-[28px] font-bold text-[var(--cc-green)]">
-            {runsLoading ? "-" : `${avgConsensus}%`}
-          </div>
-          <div className="text-xs text-[var(--cc-text-muted)] mt-1">Avg Consensus</div>
-        </div>
-        <div className="card-premium p-4 text-center">
-          <div className="text-[28px] font-bold text-[var(--cc-blue)]">
+          <div className="text-[28px] font-bold font-mono text-[var(--cc-blue)]">
             {runsLoading ? "-" : formatCost(totalSpend)}
           </div>
-          <div className="text-xs text-[var(--cc-text-muted)] mt-1">Total Spend</div>
+          <div className="text-xs text-[var(--cc-text-muted)] mt-1">Total Cost</div>
+        </div>
+        <div className="card-premium p-4 text-center">
+          <div className="text-[28px] font-bold font-mono text-[var(--cc-green)]">
+            {runsLoading ? "-" : formatCost(avgCost)}
+          </div>
+          <div className="text-xs text-[var(--cc-text-muted)] mt-1">Avg Cost / Run</div>
+        </div>
+        <div className="card-premium p-4 text-center">
+          <div className="text-[28px] font-bold font-mono text-[var(--cc-yellow)]">
+            {runsLoading ? "-" : totalFindings}
+          </div>
+          <div className="text-xs text-[var(--cc-text-muted)] mt-1">Total Findings</div>
         </div>
       </div>
 
@@ -379,8 +395,20 @@ export default function HomePage() {
               </div>
             ) : runs.length === 0 ? (
               <div className="card-premium py-16 text-center">
-                <Activity className="w-10 h-10 mx-auto mb-3 text-[var(--cc-text-muted)] opacity-40" />
-                <p className="text-[var(--cc-text-muted)]">No sessions yet. Start your first analysis above.</p>
+                <div className="flex justify-center gap-2 mb-5">
+                  {AGENT_INFO.map(({ abbr, color }) => (
+                    <div
+                      key={abbr}
+                      className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white opacity-60"
+                      style={{ backgroundColor: color }}
+                    >
+                      {abbr}
+                    </div>
+                  ))}
+                </div>
+                <Zap className="w-8 h-8 mx-auto mb-3 text-[var(--cc-accent)] opacity-60" />
+                <p className="text-lg font-semibold text-[var(--cc-text)] mb-1">Your first council session awaits</p>
+                <p className="text-sm text-[var(--cc-text-muted)]">Enter a GitHub repository URL above and click Analyse to begin.</p>
               </div>
             ) : (
               runs.map((run) => {
@@ -394,7 +422,7 @@ export default function HomePage() {
                 return (
                   <div
                     key={run.id}
-                    className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-4 px-5 py-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-[10px] cursor-pointer transition-all duration-200 hover:border-[var(--cc-border-focus)] hover:bg-[var(--cc-bg-hover)] hover:translate-x-0.5 group"
+                    className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center gap-4 px-5 py-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-[10px] cursor-pointer transition-all duration-200 hover:border-[var(--cc-border-focus)] hover:bg-[var(--cc-bg-hover)] hover:translate-x-0.5 group"
                     onClick={() => router.push(`/debate/${run.id}`)}
                   >
                     <div className="text-sm font-semibold text-[var(--cc-text)]">
@@ -417,6 +445,9 @@ export default function HomePage() {
                     </div>
                     <div className="text-[var(--cc-text-muted)] text-[13px] font-mono">
                       {formatCost(run.total_cost)}
+                    </div>
+                    <div className="text-[var(--cc-text-muted)] text-[12px] font-mono">
+                      {run.status === "completed" ? formatDuration(run.created_at, run.updated_at) : "\u2014"}
                     </div>
                     <div className="flex items-center gap-2">
                       <StatusPill status={run.status} />

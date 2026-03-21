@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { testProvider } from "@/lib/api";
 
 /* --- Agent metadata --- */
 const AGENTS_META: Record<string, { label: string; abbr: string; role: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
@@ -447,7 +448,17 @@ export default function ConfigPage() {
                         className="h-9 text-xs rounded-md"
                       />
                     </FieldGroup>
-                    <button className="py-2 px-4 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-xs text-[var(--cc-text-muted)] font-semibold cursor-pointer hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200 h-9">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await testProvider(name);
+                          toast.success(`${name} provider connected successfully`);
+                        } catch (e) {
+                          toast.error(`${name} test failed: ${e}`);
+                        }
+                      }}
+                      className="py-2 px-4 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-xs text-[var(--cc-text-muted)] font-semibold cursor-pointer hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200 h-9"
+                    >
                       Test
                     </button>
                   </div>

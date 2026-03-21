@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getRun, getRFC } from "@/lib/api";
+import { getRun, getRFC, rerunAnalysis } from "@/lib/api";
 import type { RunDetail } from "@/lib/types";
 import { RFCDocument } from "@/components/rfc/RFCDocument";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -230,7 +230,24 @@ export default function RFCPage() {
             Export HTML
           </button>
           <button
-            className="px-3.5 py-1.5 rounded-md text-xs font-semibold border cursor-pointer transition-all duration-200"
+            onClick={() => {
+              window.print();
+            }}
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold border cursor-pointer transition-all duration-200 no-print"
+            style={{
+              backgroundColor: "var(--cc-bg-card)",
+              borderColor: "var(--cc-border)",
+              color: "var(--cc-text-muted)",
+            }}
+          >
+            Print / PDF
+          </button>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              toast.success("Link copied to clipboard");
+            }}
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold border cursor-pointer transition-all duration-200 no-print"
             style={{
               backgroundColor: "var(--cc-bg-card)",
               borderColor: "var(--cc-border)",
@@ -239,13 +256,22 @@ export default function RFCPage() {
           >
             Share Link
           </button>
-          <Link
-            href={`/debate/${runId}`}
-            className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white transition-all duration-200"
+          <button
+            onClick={async () => {
+              try {
+                const result = await rerunAnalysis(runId) as { id?: string };
+                const newRunId = result?.id || runId;
+                toast.success("Re-analysis started!");
+                router.push(`/debate/${newRunId}`);
+              } catch (e) {
+                toast.error(`Re-analyse failed: ${e}`);
+              }
+            }}
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white cursor-pointer transition-all duration-200 no-print"
             style={{ backgroundColor: "var(--cc-accent)" }}
           >
             Re-analyse
-          </Link>
+          </button>
         </div>
       </div>
 

@@ -974,6 +974,28 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
                 import logging
                 logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
+        # Send webhook notification if configured
+        webhook_url = run.get("config_overrides", {}).get("webhook_url") or os.environ.get("WEBHOOK_URL", "")
+        if webhook_url and session_factory:
+            try:
+                import httpx
+                async with httpx.AsyncClient() as http:
+                    await http.post(webhook_url, json={
+                        "event": "run_completed",
+                        "run_id": run_id,
+                        "repo_url": repo_url,
+                        "status": "completed",
+                        "findings_count": len(all_findings),
+                        "proposals_count": len(proposals),
+                        "passed_count": passed,
+                        "consensus_score": consensus,
+                        "total_cost": total_cost,
+                        "rfc_preview": rfc_content[:500] if rfc_content else "",
+                    }, timeout=10)
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("Webhook failed: %s", exc)
+
         # Remove from in-memory cache — it's now fully in DB
         runs_store.pop(run_id, None)
 

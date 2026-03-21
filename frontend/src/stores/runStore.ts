@@ -109,6 +109,16 @@ function parseEventPayload(
     }
   }
 
+  // Accumulate cost from event metadata
+  const eventCost = (e as any).metadata?.cost_usd;
+  if (eventCost && typeof eventCost === 'number' && eventCost > 0) {
+    // Update the run's total_cost
+    if (state.run) {
+      const currentCost = (state.run as any).total_cost || 0;
+      updates.run = { ...(updates.run || state.run), total_cost: currentCost + eventCost } as RunSummary;
+    }
+  }
+
   return updates;
 }
 

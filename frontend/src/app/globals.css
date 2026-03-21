@@ -569,3 +569,48 @@ button[data-slot="button"][data-variant="ghost"]:hover {
   margin: 0.3em 0;
   color: var(--cc-text-secondary);
 }
+
+/* ═══════════════════════════════════════════
+   Print Styles for RFC Export
+   ═══════════════════════════════════════════ */
+@media print {
+  /* Hide non-content elements */
+  header, nav, .no-print, [data-slot="tabs-list"],
+  button, .fixed { display: none !important; }
+
+  /* Full width, white background for printing */
+  body {
+    background: white !important;
+    color: #1a1a2e !important;
+    font-size: 12pt !important;
+  }
+
+  /* Make content fill the page */
+  .prose-agent {
+    color: #1a1a2e !important;
+    max-width: 100% !important;
+  }
+  .prose-agent h1, .prose-agent h2, .prose-agent h3 {
+    color: #1a1a2e !important;
+    page-break-after: avoid;
+  }
+  .prose-agent code {
+    background: #f0f0f5 !important;
+    color: #333 !important;
+    border-color: #ddd !important;
+  }
+  .prose-agent pre {
+    background: #f5f5fa !important;
+    border-color: #ddd !important;
+  }
+  .prose-agent table th {
+    background: #f0f0f5 !important;
+  }
+  .prose-agent blockquote {
+    border-left-color: #6c5ce7 !important;
+  }
+
+  /* Sidebar hidden */
+  .rfc-sidebar { display: none !important; }
+  .rfc-content { grid-column: 1 / -1 !important; }
+}

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { listRuns, deleteRun } from "@/lib/api";
+import { listRuns, deleteRun, clearAgentMemory } from "@/lib/api";
 import type { RunSummary } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -141,6 +141,16 @@ export default function SessionsPage() {
 
   const completedRuns = runs.filter((r) => r.status === "completed").length;
 
+  function formatDuration(start?: string, end?: string): string {
+    if (!start || !end) return "--";
+    const ms = new Date(end).getTime() - new Date(start).getTime();
+    if (ms < 0) return "--";
+    const secs = Math.floor(ms / 1000);
+    const mins = Math.floor(secs / 60);
+    const remainSecs = secs % 60;
+    return `${mins}m ${remainSecs}s`;
+  }
+
   return (
     <div className="flex-1 px-8 lg:px-12 py-8 animate-fade-in">
       {/* Header */}
@@ -205,10 +215,23 @@ export default function SessionsPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="card-premium py-20 text-center">
+          <div className="flex justify-center gap-2 mb-5">
+            {AGENTS.map(({ abbr, color }) => (
+              <div
+                key={abbr}
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold text-white opacity-50"
+                style={{ backgroundColor: color }}
+              >
+                {abbr}
+              </div>
+            ))}
+          </div>
           <BarChart3 className="w-12 h-12 mx-auto mb-4 text-[var(--cc-text-muted)] opacity-30" />
-          <p className="text-lg font-medium text-[var(--cc-text-muted)]">No sessions found</p>
+          <p className="text-lg font-semibold text-[var(--cc-text)] mb-1">
+            {search || statusFilter !== "all" ? "No sessions match your filters" : "No council sessions yet"}
+          </p>
           <p className="text-sm text-[var(--cc-text-muted)] mt-1 opacity-60">
-            {search || statusFilter !== "all" ? "Try adjusting your filters" : "Run your first analysis from the home page"}
+            {search || statusFilter !== "all" ? "Try adjusting your filters" : "Start your first analysis from the home page to see sessions here."}
           </p>
         </div>
       ) : (
@@ -223,6 +246,7 @@ export default function SessionsPage() {
                 <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Topology</th>
                 <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Consensus</th>
                 <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Cost</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Duration</th>
                 <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Status</th>
                 <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">RFC</th>
               </tr>
@@ -297,6 +321,9 @@ export default function SessionsPage() {
                     </td>
                     <td className="py-3.5 px-3.5 font-mono text-[13px] text-[var(--cc-text-muted)]">
                       {formatCost(run.total_cost)}
+                    </td>
+                    <td className="py-3.5 px-3.5 font-mono text-[12px] text-[var(--cc-text-muted)]">
+                      {run.status === "completed" ? formatDuration(run.created_at, run.updated_at) : "\u2014"}
                     </td>
                     <td className="py-3.5 px-3.5">
                       <StatusPill status={run.status} />
@@ -384,7 +411,17 @@ export default function SessionsPage() {
                   )}
                 </div>
 
-                <button className="mt-2 py-1 px-2.5 bg-transparent border border-[var(--cc-border)] rounded text-[11px] text-[var(--cc-text-muted)] cursor-pointer hover:border-[var(--cc-red)] hover:text-[var(--cc-red)] transition-all duration-200">
+                <button
+                  onClick={async () => {
+                    try {
+                      await clearAgentMemory(handle);
+                      toast.success(`${label} memory cleared`);
+                    } catch (e) {
+                      toast.error(`Failed to clear ${label} memory: ${e}`);
+                    }
+                  }}
+                  className="mt-2 py-1 px-2.5 bg-transparent border border-[var(--cc-border)] rounded text-[11px] text-[var(--cc-text-muted)] cursor-pointer hover:border-[var(--cc-red)] hover:text-[var(--cc-red)] transition-all duration-200"
+                >
                   Clear Memory
                 </button>
               </div>
