@@ -1,14 +1,4 @@
-"""CodeCouncil API server."""
+"""CodeCouncil API server entry point."""
+from codecouncil.api.app import create_app
 
-from fastapi import FastAPI
-
-app = FastAPI(
-    title="CodeCouncil",
-    description="AI agent council for codebase intelligence",
-    version="0.1.0",
-)
-
-
-@app.get("/api/health")
-async def health():
-    return {"status": "ok"}
+app = create_app()

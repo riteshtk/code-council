@@ -1,1 +1,165 @@
-""
+"""Run management endpoints."""
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
+from pydantic import BaseModel
+
+router = APIRouter(tags=["runs"])
+
+# ---------------------------------------------------------------------------
+# In-memory store for runs (DB integration deferred; no DB required in tests)
+# ---------------------------------------------------------------------------
+_runs: dict[str, dict] = {}
+
+
+# ---------------------------------------------------------------------------
+# Pydantic request/response models
+# ---------------------------------------------------------------------------
+
+class CreateRunRequest(BaseModel):
+    repo_url: str
+    config_overrides: dict[str, Any] | None = None
+
+
+class ReviewRequest(BaseModel):
+    type: str  # "challenge" | "override" | "approve" | "redebate"
+    finding_id: str | None = None
+    proposal_id: str | None = None
+    content: str | None = None
+    new_vote: str | None = None
+    reason: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/runs", status_code=201)
+async def create_run(request: CreateRunRequest) -> dict:
+    """Start a new council run."""
+    run_id = str(uuid.uuid4())
+    run = {
+        "run_id": run_id,
+        "repo_url": request.repo_url,
+        "config_overrides": request.config_overrides or {},
+        "status": "pending",
+        "phase": "init",
+        "events": [],
+        "cost_usd": 0.0,
+    }
+    _runs[run_id] = run
+    return {"run_id": run_id, "status": "pending"}
+
+
+@router.get("/runs")
+async def list_runs(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """List all runs."""
+    all_runs = list(_runs.values())
+    paginated = all_runs[offset: offset + limit]
+    return {
+        "runs": paginated,
+        "total": len(all_runs),
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.get("/runs/{run_id}")
+async def get_run(run_id: str) -> dict:
+    """Get full run state."""
+    run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    return run
+
+
+@router.delete("/runs/{run_id}")
+async def cancel_run(run_id: str) -> dict:
+    """Cancel an in-progress run."""
+    run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    run["status"] = "cancelled"
+    return {"run_id": run_id, "status": "cancelled"}
+
+
+@router.post("/runs/{run_id}/review")
+async def submit_review(run_id: str, review: ReviewRequest) -> dict:
+    """Submit a human challenge/override for a run."""
+    run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    return {"run_id": run_id, "review_type": review.type, "accepted": True}
+
+
+@router.get("/runs/{run_id}/rfc")
+async def get_rfc(run_id: str, format: str = Query(default="markdown")) -> Response:
+    """Get the RFC document in the specified format."""
+    run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    content = f"# RFC for {run['repo_url']}\n\n*No RFC generated yet.*\n"
+    media_type = "text/markdown" if format == "markdown" else "application/json"
+    return Response(content=content, media_type=media_type)
+
+
+@router.get("/runs/{run_id}/events")
+async def get_events(
+    run_id: str,
+    agent: str | None = Query(default=None),
+    event_type: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """Get events for a run with optional filtering."""
+    run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    events = run.get("events", [])
+    if agent:
+        events = [e for e in events if e.get("agent") == agent]
+    if event_type:
+        events = [e for e in events if e.get("event_type") == event_type]
+    paginated = events[offset: offset + limit]
+    return {"events": paginated, "total": len(events)}
+
+
+@router.get("/runs/{run_id}/cost")
+async def get_cost(run_id: str) -> dict:
+    """Get cost breakdown for a run."""
+    run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    return {
+        "run_id": run_id,
+        "total_usd": run.get("cost_usd", 0.0),
+        "breakdown": [],
+    }
+
+
+@router.post("/runs/{run_id}/rerun", status_code=201)
+async def rerun(run_id: str) -> dict:
+    """Re-run the same analysis with the same or modified config."""
+    run = _runs.get(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+    new_run_id = str(uuid.uuid4())
+    new_run = {
+        "run_id": new_run_id,
+        "repo_url": run["repo_url"],
+        "config_overrides": run["config_overrides"],
+        "status": "pending",
+        "phase": "init",
+        "events": [],
+        "cost_usd": 0.0,
+        "rerun_of": run_id,
+    }
+    _runs[new_run_id] = new_run
+    return {"run_id": new_run_id, "status": "pending", "rerun_of": run_id}
