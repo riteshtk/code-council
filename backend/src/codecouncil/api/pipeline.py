@@ -61,6 +61,46 @@ _EXCLUDE_DIRS: set[str] = {
 }
 
 
+async def _persist_event(session_factory, event_dict: dict) -> None:
+    """Persist a single event to DB. Best-effort — never crashes the pipeline."""
+    try:
+        async with session_factory() as db:
+            from codecouncil.db.repositories import EventRepository
+            repo = EventRepository(db)
+            await repo.create_event({
+                "id": uuid.UUID(event_dict["event_id"]),
+                "run_id": uuid.UUID(event_dict["run_id"]),
+                "sequence": event_dict["sequence"],
+                "agent": event_dict["agent"],
+                "event_type": event_dict["event_type"],
+                "phase": event_dict.get("phase", ""),
+                "round": event_dict.get("round"),
+                "content": event_dict.get("content", ""),
+                "structured": event_dict.get("structured", {}),
+                "provider": event_dict.get("metadata", {}).get("provider"),
+                "model": event_dict.get("metadata", {}).get("model"),
+                "input_tokens": event_dict.get("metadata", {}).get("input_tokens", 0),
+                "output_tokens": event_dict.get("metadata", {}).get("output_tokens", 0),
+                "cost_usd": event_dict.get("metadata", {}).get("cost_usd", 0),
+                "latency_ms": event_dict.get("metadata", {}).get("latency_ms", 0),
+                "cached": event_dict.get("metadata", {}).get("cached", False),
+            })
+            await db.commit()
+    except Exception:
+        pass  # Don't crash pipeline if DB write fails
+
+
+async def _update_run_phase(session_factory, run_id: str, status: str, phase: str) -> None:
+    """Update run status/phase in DB. Best-effort."""
+    try:
+        async with session_factory() as db:
+            from codecouncil.db.repositories import RunRepository
+            await RunRepository(db).update_run_status(uuid.UUID(run_id), status, phase)
+            await db.commit()
+    except Exception:
+        pass
+
+
 async def run_real_council(run: dict, runs_store: dict, *, session_factory=None) -> None:
     """Run a REAL council analysis on a GitHub repository."""
     run_id = run["run_id"]
@@ -74,9 +114,10 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
         phase: str,
         **extra: object,
     ) -> None:
+        event_id = str(uuid.uuid4())
         event = {
-            "id": str(uuid.uuid4()),
-            "event_id": str(uuid.uuid4()),
+            "id": event_id,
+            "event_id": event_id,
             "run_id": run_id,
             "agent": agent,
             "agent_id": agent,
@@ -92,6 +133,10 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
         }
         run["events"].append(event)
         run["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+        # Persist event to DB immediately (best-effort)
+        if session_factory:
+            asyncio.ensure_future(_persist_event(session_factory, event))
 
     if not api_key:
         run["status"] = "failed"
@@ -118,10 +163,7 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
 
         # DB checkpoint: mark running
         if session_factory:
-            async with session_factory() as _db:
-                from codecouncil.db.repositories import RunRepository as _RR
-                await _RR(_db).update_run_status(uuid.UUID(run_id), "running", "ingesting")
-                await _db.commit()
+            await _update_run_phase(session_factory, run_id, "running", "ingesting")
 
         tmpdir = tempfile.mkdtemp(prefix="codecouncil_")
         clone_url = repo_url if repo_url.endswith(".git") else repo_url + ".git"
@@ -244,6 +286,8 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
         # PHASE 2: ANALYSIS — Each agent analyses independently
         # =================================================================
         run["phase"] = "analysing"
+        if session_factory:
+            await _update_run_phase(session_factory, run_id, "running", "analysing")
         emit("system", "phase_started", "Analysis phase: agents running in parallel", "analysing")
 
         agent_prompts = {
@@ -374,27 +418,32 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
 
         # DB checkpoint: persist findings
         if session_factory:
-            async with session_factory() as _db:
-                from codecouncil.db.repositories import FindingRepository as _FR, RunRepository as _RR2
-                await _RR2(_db).update_run_status(uuid.UUID(run_id), "running", "analysing")
-                fr = _FR(_db)
-                for f in all_findings:
-                    await fr.create_finding({
-                        "id": uuid.UUID(f["id"]),
-                        "run_id": uuid.UUID(run_id),
-                        "agent": f["agent"],
-                        "severity": f["severity"],
-                        "scope": f.get("scope", "repository"),
-                        "content": f["content"],
-                        "implication": f.get("implication", ""),
-                        "created_at": datetime.now(timezone.utc),
-                    })
-                await _db.commit()
+            await _update_run_phase(session_factory, run_id, "running", "analysing")
+            try:
+                async with session_factory() as _db:
+                    from codecouncil.db.repositories import FindingRepository as _FR
+                    fr = _FR(_db)
+                    for f in all_findings:
+                        await fr.create_finding({
+                            "id": uuid.UUID(f["id"]),
+                            "run_id": uuid.UUID(run_id),
+                            "agent": f["agent"],
+                            "severity": f["severity"],
+                            "scope": f.get("scope", "repository"),
+                            "content": f["content"],
+                            "implication": f.get("implication", ""),
+                            "created_at": datetime.now(timezone.utc),
+                        })
+                    await _db.commit()
+            except Exception:
+                pass
 
         # =================================================================
         # PHASE 3: DEBATE — Visionary proposes, Skeptic challenges
         # =================================================================
         run["phase"] = "debate"
+        if session_factory:
+            await _update_run_phase(session_factory, run_id, "running", "debate")
         emit("system", "phase_started", "Debate phase: Adversarial topology", "debate")
 
         findings_summary = "\n".join(
@@ -604,30 +653,35 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
 
         # DB checkpoint: persist proposals
         if session_factory:
-            async with session_factory() as _db:
-                from codecouncil.db.repositories import ProposalRepository as _PR, RunRepository as _RR3
-                await _RR3(_db).update_run_status(uuid.UUID(run_id), "running", "debate")
-                pr = _PR(_db)
-                for p in proposals:
-                    await pr.create_proposal({
-                        "id": uuid.UUID(p["id"]),
-                        "run_id": uuid.UUID(run_id),
-                        "proposal_number": p["proposal_number"],
-                        "version": p["version"],
-                        "title": p["title"],
-                        "goal": p["goal"],
-                        "effort": p.get("effort", "M"),
-                        "status": p["status"],
-                        "author_agent": p.get("author_agent", "visionary"),
-                        "created_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc),
-                    })
-                await _db.commit()
+            await _update_run_phase(session_factory, run_id, "running", "debate")
+            try:
+                async with session_factory() as _db:
+                    from codecouncil.db.repositories import ProposalRepository as _PR
+                    pr = _PR(_db)
+                    for p in proposals:
+                        await pr.create_proposal({
+                            "id": uuid.UUID(p["id"]),
+                            "run_id": uuid.UUID(run_id),
+                            "proposal_number": p["proposal_number"],
+                            "version": p["version"],
+                            "title": p["title"],
+                            "goal": p["goal"],
+                            "effort": p.get("effort", "M"),
+                            "status": p["status"],
+                            "author_agent": p.get("author_agent", "visionary"),
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc),
+                        })
+                    await _db.commit()
+            except Exception:
+                pass
 
         # =================================================================
         # PHASE 4: VOTING
         # =================================================================
         run["phase"] = "synthesis"
+        if session_factory:
+            await _update_run_phase(session_factory, run_id, "running", "synthesis")
         emit("system", "phase_started", "Voting phase", "synthesis")
 
         all_votes: list[dict] = []
@@ -707,34 +761,38 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
 
         # DB checkpoint: persist votes and update proposal statuses
         if session_factory:
-            async with session_factory() as _db:
-                from codecouncil.db.repositories import (
-                    ProposalRepository as _PR2,
-                    RunRepository as _RR4,
-                    VoteRepository as _VR,
-                )
-                await _RR4(_db).update_run_status(uuid.UUID(run_id), "running", "synthesis")
-                vr = _VR(_db)
-                for v in all_votes:
-                    await vr.create_vote({
-                        "id": uuid.UUID(v["id"]),
-                        "run_id": uuid.UUID(run_id),
-                        "proposal_id": uuid.UUID(v["proposal_id"]),
-                        "agent": v["agent"],
-                        "vote": v["vote"],
-                        "rationale": v.get("rationale", ""),
-                        "confidence": v.get("confidence", 0.7),
-                        "created_at": datetime.now(timezone.utc),
-                    })
-                pr2 = _PR2(_db)
-                for p in proposals:
-                    await pr2.update_proposal_status(uuid.UUID(p["id"]), p["status"])
-                await _db.commit()
+            await _update_run_phase(session_factory, run_id, "running", "synthesis")
+            try:
+                async with session_factory() as _db:
+                    from codecouncil.db.repositories import (
+                        ProposalRepository as _PR2,
+                        VoteRepository as _VR,
+                    )
+                    vr = _VR(_db)
+                    for v in all_votes:
+                        await vr.create_vote({
+                            "id": uuid.UUID(v["id"]),
+                            "run_id": uuid.UUID(run_id),
+                            "proposal_id": uuid.UUID(v["proposal_id"]),
+                            "agent": v["agent"],
+                            "vote": v["vote"],
+                            "rationale": v.get("rationale", ""),
+                            "confidence": v.get("confidence", 0.7),
+                            "created_at": datetime.now(timezone.utc),
+                        })
+                    pr2 = _PR2(_db)
+                    for p in proposals:
+                        await pr2.update_proposal_status(uuid.UUID(p["id"]), p["status"])
+                    await _db.commit()
+            except Exception:
+                pass
 
         # =================================================================
         # PHASE 5: SCRIBING — Generate RFC
         # =================================================================
         run["phase"] = "scribing"
+        if session_factory:
+            await _update_run_phase(session_factory, run_id, "running", "scribing")
         emit("system", "phase_started", "Scribe generating RFC", "scribing")
         emit("scribe", "agent_thinking", "Synthesizing council proceedings into RFC", "scribing")
 
@@ -858,6 +916,8 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
                 "output_tokens": rfc_response.usage.completion_tokens if rfc_response.usage else 0,
             },
         )
+        # Persist RFC content as a special event so it survives restart
+        emit("scribe", "rfc_generated", rfc_content, "scribing", structured={"rfc_content": rfc_content})
         emit("system", "phase_completed", "RFC finalized", "scribing")
 
         # =================================================================
@@ -882,33 +942,25 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
             "output",
         )
 
-        # DB checkpoint: persist ALL events, update final run state, remove from cache
+        # DB checkpoint: update final run state (events already persisted incrementally)
         if session_factory:
-            async with session_factory() as _db:
-                from codecouncil.db.repositories import EventRepository as _ER, RunRepository as _RR5
-                event_repo = _ER(_db)
-                for e in run["events"]:
-                    await event_repo.create_event({
-                        "id": uuid.UUID(e["event_id"]),
-                        "run_id": uuid.UUID(run_id),
-                        "sequence": e["sequence"],
-                        "agent": e["agent"],
-                        "event_type": e["event_type"],
-                        "phase": e.get("phase", ""),
-                        "content": e.get("content", ""),
-                        "structured": e.get("structured", {}),
-                        "provider": e.get("metadata", {}).get("provider"),
-                        "model": e.get("metadata", {}).get("model"),
-                        "input_tokens": e.get("metadata", {}).get("input_tokens", 0),
-                        "output_tokens": e.get("metadata", {}).get("output_tokens", 0),
-                        "cost_usd": e.get("metadata", {}).get("cost_usd", 0),
-                        "latency_ms": e.get("metadata", {}).get("latency_ms", 0),
-                        "cached": e.get("metadata", {}).get("cached", False),
-                    })
-                run_repo = _RR5(_db)
-                await run_repo.update_run_status(uuid.UUID(run_id), "completed", "done")
-                await run_repo.update_run_cost(uuid.UUID(run_id), total_cost)
-                await _db.commit()
+            try:
+                async with session_factory() as _db:
+                    from codecouncil.db.repositories import RunRepository as _RR5
+                    from sqlalchemy import update as _sa_update
+                    from codecouncil.db.models import RunModel as _RM
+                    run_repo = _RR5(_db)
+                    await run_repo.update_run_status(uuid.UUID(run_id), "completed", "done")
+                    await run_repo.update_run_cost(uuid.UUID(run_id), total_cost)
+                    # Also persist consensus score
+                    await _db.execute(
+                        _sa_update(_RM).where(_RM.id == uuid.UUID(run_id)).values(
+                            consensus_score=consensus
+                        )
+                    )
+                    await _db.commit()
+            except Exception:
+                pass
 
         # Remove from in-memory cache — it's now fully in DB
         runs_store.pop(run_id, None)

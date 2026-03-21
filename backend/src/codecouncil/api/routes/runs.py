@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from codecouncil.api.deps import get_db
 from codecouncil.api.pipeline import run_real_council
-from codecouncil.db.repositories import EventRepository, RunRepository
+from codecouncil.db.repositories import (
+    EventRepository,
+    FindingRepository,
+    ProposalRepository,
+    RunRepository,
+    VoteRepository,
+)
 
 router = APIRouter(tags=["runs"])
 
@@ -50,16 +56,20 @@ def _normalize_run(run: dict) -> dict:
     }
 
 
-def _orm_run_to_dict(r) -> dict:
+def _orm_run_to_dict(r, *, findings=None, proposals=None, votes=None, events=None, rfc_content="") -> dict:
     """Convert an ORM RunModel into the normalised dict the frontend expects."""
+    findings = findings or []
+    proposals = proposals or []
+    votes = votes or []
+    events = events or []
     return {
         "id": str(r.id),
         "status": r.status or "pending",
         "phase": r.phase or "init",
         "repo": {"url": r.repo_url or "", "local_path": ""},
         "total_cost": r.total_cost_usd or 0,
-        "finding_count": 0,
-        "proposal_count": 0,
+        "finding_count": len(findings),
+        "proposal_count": len(proposals),
         "created_at": r.started_at.isoformat() if r.started_at else "",
         "updated_at": (
             r.completed_at.isoformat()
@@ -69,13 +79,115 @@ def _orm_run_to_dict(r) -> dict:
             else ""
         ),
         "consensus_score": r.consensus_score or 0,
-        "has_rfc": False,
+        "has_rfc": bool(rfc_content),
+        "rfc_content": rfc_content,
         "config_overrides": r.config_snapshot or {},
-        "findings": [],
-        "proposals": [],
-        "votes": [],
-        "events": [],
+        "findings": [_orm_finding_to_dict(f) for f in findings],
+        "proposals": [_orm_proposal_to_dict(p, votes) for p in proposals],
+        "votes": [_orm_vote_to_dict(v) for v in votes],
+        "events": [_orm_event_to_dict(e) for e in events],
+        "debate_rounds": [],  # Could reconstruct from events
     }
+
+
+def _orm_finding_to_dict(f) -> dict:
+    return {
+        "id": str(f.id),
+        "run_id": str(f.run_id),
+        "agent": f.agent,
+        "agent_id": f.agent,
+        "severity": f.severity,
+        "content": f.content,
+        "title": f.content[:200] if f.content else "",
+        "description": f.content,
+        "implication": f.implication or "",
+        "scope": f.scope or "",
+        "phase": "analysis",
+        "tags": [],
+        "created_at": f.created_at.isoformat() if f.created_at else "",
+    }
+
+
+def _orm_proposal_to_dict(p, all_votes) -> dict:
+    p_votes = [_orm_vote_to_dict(v) for v in all_votes if v.proposal_id == p.id]
+    return {
+        "id": str(p.id),
+        "run_id": str(p.run_id),
+        "proposal_number": p.proposal_number,
+        "version": p.version,
+        "title": p.title,
+        "goal": p.goal or "",
+        "description": p.goal or "",
+        "effort": p.effort or "M",
+        "status": p.status or "proposed",
+        "author_agent": p.author_agent or "",
+        "agent_id": p.author_agent or "",
+        "breaking_change": False,
+        "finding_ids": [],
+        "votes": p_votes,
+        "created_at": p.created_at.isoformat() if p.created_at else "",
+        "updated_at": p.updated_at.isoformat() if p.updated_at else "",
+    }
+
+
+def _orm_vote_to_dict(v) -> dict:
+    return {
+        "id": str(v.id),
+        "run_id": str(v.run_id),
+        "proposal_id": str(v.proposal_id),
+        "agent": v.agent,
+        "agent_id": v.agent,
+        "vote": v.vote,
+        "vote_type": "approve" if v.vote == "YES" else "reject" if v.vote == "NO" else "abstain",
+        "rationale": v.rationale or "",
+        "reasoning": v.rationale or "",
+        "confidence": v.confidence or 0.5,
+        "created_at": v.created_at.isoformat() if v.created_at else "",
+    }
+
+
+def _orm_event_to_dict(e) -> dict:
+    return {
+        "id": str(e.id),
+        "event_id": str(e.id),
+        "run_id": str(e.run_id),
+        "agent": e.agent,
+        "agent_id": e.agent,
+        "type": e.event_type,
+        "event_type": e.event_type,
+        "phase": e.phase or "",
+        "round": e.round,
+        "content": e.content or "",
+        "structured": e.structured or {},
+        "payload": e.structured or {},
+        "timestamp": e.created_at.isoformat() if e.created_at else "",
+        "sequence": e.sequence or 0,
+        "metadata": {
+            "provider": e.provider or "",
+            "model": e.model or "",
+            "input_tokens": e.input_tokens or 0,
+            "output_tokens": e.output_tokens or 0,
+            "cost_usd": e.cost_usd or 0,
+            "latency_ms": e.latency_ms or 0,
+            "cached": e.cached or False,
+        },
+    }
+
+
+async def _load_rfc_from_events(event_repo: EventRepository, run_id) -> str:
+    """Extract RFC content from the rfc_generated event."""
+    rfc_events = await event_repo.get_events_for_run(
+        run_id, event_type="rfc_generated", limit=1,
+    )
+    if rfc_events:
+        return rfc_events[0].content or ""
+    # Fallback: try scribe agent_response from scribing phase
+    scribe_events = await event_repo.get_events_for_run(
+        run_id, agent="scribe", event_type="agent_response", phase="scribing", limit=1,
+    )
+    if scribe_events:
+        return scribe_events[0].content or ""
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +271,9 @@ async def list_runs(
 
     if db is not None:
         repo = RunRepository(db)
+        finding_repo = FindingRepository(db)
+        proposal_repo = ProposalRepository(db)
+        event_repo = EventRepository(db)
         db_runs = await repo.list_runs(limit=200, offset=0)
         for r in db_runs:
             rid = str(r.id)
@@ -167,7 +282,16 @@ async def list_runs(
             if live:
                 results.append(_normalize_run(live))
             else:
-                results.append(_orm_run_to_dict(r))
+                findings = await finding_repo.get_findings_for_run(r.id)
+                proposals = await proposal_repo.get_proposals_for_run(r.id)
+                # Lightweight RFC check: just see if the event exists
+                rfc_events = await event_repo.get_events_for_run(
+                    r.id, event_type="rfc_generated", limit=1,
+                )
+                has_rfc_marker = "yes" if rfc_events else ""
+                results.append(_orm_run_to_dict(
+                    r, findings=findings, proposals=proposals, rfc_content=has_rfc_marker,
+                ))
 
     # Add any in-progress runs not yet in DB (or if DB is unavailable)
     for rid, run in _runs.items():
@@ -199,7 +323,26 @@ async def get_run(run_id: str, db: AsyncSession | None = Depends(get_db)) -> dic
         repo = RunRepository(db)
         r = await repo.get_run(uid)
         if r is not None:
-            return _orm_run_to_dict(r)
+            finding_repo = FindingRepository(db)
+            proposal_repo = ProposalRepository(db)
+            vote_repo = VoteRepository(db)
+            event_repo = EventRepository(db)
+
+            findings = await finding_repo.get_findings_for_run(uid)
+            proposals = await proposal_repo.get_proposals_for_run(uid)
+            votes = await vote_repo.get_votes_for_run(uid)
+            events = await event_repo.get_events_for_run(uid, limit=500)
+
+            rfc_content = await _load_rfc_from_events(event_repo, uid)
+
+            return _orm_run_to_dict(
+                r,
+                findings=findings,
+                proposals=proposals,
+                votes=votes,
+                events=events,
+                rfc_content=rfc_content,
+            )
 
     raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
 
@@ -267,15 +410,15 @@ async def get_rfc(
         r = await repo.get_run(uid)
         if r is None:
             raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-        norm = _orm_run_to_dict(r)
         event_repo = EventRepository(db)
-        events = await event_repo.get_events_for_run(
-            uid, event_type="agent_response", phase="scribing", limit=1,
-        )
-        if events:
-            rfc = events[0].content or ""
-        else:
+        rfc = await _load_rfc_from_events(event_repo, uid)
+        if not rfc:
             rfc = f"# RFC for {r.repo_url}\n\n*No RFC content available.*\n"
+        # Build norm with basic data for JSON format
+        findings = await FindingRepository(db).get_findings_for_run(uid)
+        proposals = await ProposalRepository(db).get_proposals_for_run(uid)
+        votes = await VoteRepository(db).get_votes_for_run(uid)
+        norm = _orm_run_to_dict(r, findings=findings, proposals=proposals, votes=votes, rfc_content=rfc)
     else:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
 
