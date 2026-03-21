@@ -255,7 +255,7 @@ export default function ConfigPage() {
 
   if (loading && !config) {
     return (
-      <div className="flex-1 p-8 max-w-4xl mx-auto w-full space-y-4">
+      <div className="flex-1 p-8 max-w-6xl mx-auto w-full space-y-4">
         <Skeleton className="h-8 w-48 rounded-lg" />
         <Skeleton className="h-12 w-full rounded-xl" />
         <Skeleton className="h-64 w-full rounded-xl" />
@@ -264,7 +264,7 @@ export default function ConfigPage() {
   }
 
   return (
-    <div className="flex-1 p-6 lg:p-8 max-w-4xl mx-auto w-full animate-fade-in">
+    <div className="flex-1 p-6 lg:p-8 max-w-6xl mx-auto w-full animate-fade-in">
       {/* Page header */}
       <div className="flex items-center justify-between mb-8">
         <div>

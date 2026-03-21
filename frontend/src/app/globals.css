@@ -221,6 +221,8 @@ button[data-slot="button"][data-variant="ghost"]:hover {
   padding: 4px !important;
   border-radius: 12px !important;
   height: auto !important;
+  width: 100% !important;
+  display: flex !important;
 }
 [data-slot="tabs-trigger"] {
   color: var(--cc-text-muted) !important;
@@ -228,9 +230,11 @@ button[data-slot="button"][data-variant="ghost"]:hover {
   font-weight: 500 !important;
   border: none !important;
   border-radius: 8px !important;
-  padding: 6px 14px !important;
+  padding: 8px 16px !important;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
   box-shadow: none !important;
+  flex: 1 !important;
+  justify-content: center !important;
 }
 [data-slot="tabs-trigger"]:hover {
   color: var(--cc-text) !important;
