@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -80,76 +80,113 @@ def _memory_model_to_dict(model: Any) -> dict:
 
 
 @router.get("/agents")
-async def list_agents(db: AsyncSession | None = Depends(get_db)) -> dict:
+async def list_agents(request: Request, db: AsyncSession | None = Depends(get_db)) -> dict:
     """Return metadata for all registered agents, including custom ones."""
-    normalized = [
-        {
-            "id": agent["handle"],
-            "name": agent["name"],
-            "role": agent["debate_role"],
-            "color": agent["color"],
-            "description": agent["description"],
-            "handle": agent["handle"],
-        }
-        for agent in _AGENT_METADATA
-    ]
+    registry = getattr(request.app.state, "agent_registry", None)
+    agents_list: list[dict] = []
 
-    # Add in-memory custom agents
-    for _handle, agent in _custom_agents.items():
-        normalized.append(agent)
+    if registry:
+        for defn in registry.list_all():
+            agents_list.append(defn.to_api_dict())
+    else:
+        # Fallback to hardcoded defaults
+        agents_list = [
+            {
+                "id": agent["handle"],
+                "name": agent["name"],
+                "role": agent["debate_role"],
+                "color": agent["color"],
+                "description": agent["description"],
+                "handle": agent["handle"],
+            }
+            for agent in _AGENT_METADATA
+        ]
 
-    # Also load persisted custom agents from DB
-    if db is not None:
-        try:
-            repo = PersonaRepository(db)
-            personas = await repo.list_personas()
-            for p in personas:
-                if p.name.startswith("agent:"):
-                    agent_data = json.loads(p.content)
-                    handle = agent_data.get("handle", "")
-                    # Avoid duplicates with in-memory store
-                    if handle not in _custom_agents:
-                        normalized.append(agent_data)
-        except Exception:
-            pass  # DB may not be available
+        # Add in-memory custom agents
+        for _handle, agent in _custom_agents.items():
+            agents_list.append(agent)
 
-    return {"agents": normalized}
+        # Also load persisted custom agents from DB
+        if db is not None:
+            try:
+                repo = PersonaRepository(db)
+                personas = await repo.list_personas()
+                for p in personas:
+                    if p.name.startswith("agent:"):
+                        agent_data = json.loads(p.content)
+                        handle = agent_data.get("handle", "")
+                        # Avoid duplicates with in-memory store
+                        if handle not in _custom_agents:
+                            agents_list.append(agent_data)
+            except Exception:
+                pass  # DB may not be available
+
+    return {"agents": agents_list}
 
 
 @router.post("/agents")
 async def create_agent(
-    request: CreateAgentRequest,
+    request_body: CreateAgentRequest,
+    request: Request,
     db: AsyncSession | None = Depends(get_db),
 ) -> dict:
     """Create a custom agent."""
     # Check not colliding with built-in agents
-    if request.handle in _VALID_HANDLES:
+    registry = getattr(request.app.state, "agent_registry", None)
+    if request_body.handle in _VALID_HANDLES:
         raise HTTPException(
             status_code=400,
-            detail=f"Handle '{request.handle}' conflicts with a built-in agent",
+            detail=f"Handle '{request_body.handle}' conflicts with a built-in agent",
+        )
+    if registry and registry.get(request_body.handle) and registry.get(request_body.handle).is_builtin:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Handle '{request_body.handle}' conflicts with a built-in agent",
         )
 
     agent: dict[str, Any] = {
-        "id": request.handle,
-        "handle": request.handle,
-        "name": request.name,
-        "role": request.role,
-        "color": request.color,
-        "persona_prompt": request.persona_prompt,
-        "focus_areas": request.focus_areas,
-        "debate_role": request.debate_role,
-        "temperature": request.temperature,
-        "vote_weight": request.vote_weight,
+        "id": request_body.handle,
+        "handle": request_body.handle,
+        "name": request_body.name,
+        "role": request_body.role,
+        "color": request_body.color,
+        "persona_prompt": request_body.persona_prompt,
+        "focus_areas": request_body.focus_areas,
+        "debate_role": request_body.debate_role,
+        "temperature": request_body.temperature,
+        "vote_weight": request_body.vote_weight,
         "is_custom": True,
     }
-    _custom_agents[request.handle] = agent
+    _custom_agents[request_body.handle] = agent
+
+    # Register in the agent registry
+    if registry:
+        from codecouncil.agents.definition import AgentDefinition
+
+        defn = AgentDefinition(
+            handle=request_body.handle,
+            name=request_body.name,
+            abbr=request_body.handle[:2].upper(),
+            role=request_body.role,
+            short_role=request_body.debate_role,
+            color=request_body.color,
+            icon="user",
+            description=request_body.role,
+            debate_role=request_body.debate_role,
+            temperature=request_body.temperature,
+            vote_weight=request_body.vote_weight,
+            persona=request_body.persona_prompt,
+            focus_areas=request_body.focus_areas,
+            is_builtin=False,
+        )
+        registry.register(defn)
 
     # Also persist to DB as a persona
     if db is not None:
         try:
             repo = PersonaRepository(db)
             await repo.create_persona(
-                name=f"agent:{request.handle}",
+                name=f"agent:{request_body.handle}",
                 content=json.dumps(agent),
                 is_default=False,
             )
@@ -163,6 +200,7 @@ async def create_agent(
 @router.delete("/agents/{handle}")
 async def delete_agent(
     handle: str,
+    request: Request,
     db: AsyncSession | None = Depends(get_db),
 ) -> dict:
     """Delete a custom agent."""
@@ -171,6 +209,16 @@ async def delete_agent(
             status_code=400,
             detail="Cannot delete built-in agents",
         )
+
+    registry = getattr(request.app.state, "agent_registry", None)
+    if registry:
+        existing = registry.get(handle)
+        if existing and existing.is_builtin:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete built-in agents",
+            )
+        registry.unregister(handle)
 
     removed = handle in _custom_agents
     if handle in _custom_agents:
@@ -186,7 +234,7 @@ async def delete_agent(
         except Exception:
             pass
 
-    if not removed:
+    if not removed and not (registry and registry.get(handle) is None):
         raise HTTPException(status_code=404, detail=f"Custom agent '{handle}' not found")
 
     return {"handle": handle, "deleted": True}
@@ -195,10 +243,13 @@ async def delete_agent(
 @router.get("/agents/{handle}/memory")
 async def get_agent_memory(
     handle: str,
+    request: Request,
     db: AsyncSession | None = Depends(get_db),
 ) -> dict:
     """Return persisted memory summaries for an agent."""
-    if handle not in _VALID_HANDLES and handle not in _custom_agents:
+    registry = getattr(request.app.state, "agent_registry", None)
+    known = handle in _VALID_HANDLES or handle in _custom_agents or (registry and registry.get(handle) is not None)
+    if not known:
         raise HTTPException(status_code=404, detail=f"Agent '{handle}' not found")
 
     if db is not None:
@@ -213,10 +264,13 @@ async def get_agent_memory(
 @router.delete("/agents/{handle}/memory")
 async def clear_agent_memory(
     handle: str,
+    request: Request,
     db: AsyncSession | None = Depends(get_db),
 ) -> dict:
     """Clear all persisted memory for an agent."""
-    if handle not in _VALID_HANDLES and handle not in _custom_agents:
+    registry = getattr(request.app.state, "agent_registry", None)
+    known = handle in _VALID_HANDLES or handle in _custom_agents or (registry and registry.get(handle) is not None)
+    if not known:
         raise HTTPException(status_code=404, detail=f"Agent '{handle}' not found")
 
     if db is not None:

@@ -648,28 +648,20 @@ app.add_typer(personas_app, name="personas")
 @personas_app.command("list")
 def personas_list() -> None:
     """List all configured personas."""
-    from codecouncil.config.defaults import (
-        ARCHAEOLOGIST_PERSONA,
-        SCRIBE_PERSONA,
-        SKEPTIC_PERSONA,
-        VISIONARY_PERSONA,
-    )
+    from codecouncil.agents.registry import AgentRegistry
+
+    registry = AgentRegistry()
+    registry.discover_builtin()
 
     table = Table(title="Agent Personas", show_header=True, header_style="bold yellow")
     table.add_column("Agent", style="bold")
     table.add_column("Source")
     table.add_column("Preview", max_width=60)
 
-    persona_map = {
-        "archaeologist": ARCHAEOLOGIST_PERSONA,
-        "skeptic": SKEPTIC_PERSONA,
-        "visionary": VISIONARY_PERSONA,
-        "scribe": SCRIBE_PERSONA,
-    }
-
-    for handle, persona in persona_map.items():
-        preview = persona.strip().splitlines()[0][:60] if persona else "(empty)"
-        table.add_row(handle, "built-in", preview)
+    for defn in registry.list_all():
+        preview = defn.persona.strip().splitlines()[0][:60] if defn.persona else "(empty)"
+        source = "built-in" if defn.is_builtin else "custom"
+        table.add_row(defn.handle, source, preview)
 
     console.print(table)
 

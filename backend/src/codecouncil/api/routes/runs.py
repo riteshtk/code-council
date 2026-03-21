@@ -264,7 +264,12 @@ async def create_run(
 
     # Launch real pipeline as background task
     session_factory = getattr(request.app.state, "db_session_factory", None)
-    task = asyncio.create_task(run_real_council(run, _runs, session_factory=session_factory))
+    agent_registry = getattr(request.app.state, "agent_registry", None)
+    task = asyncio.create_task(run_real_council(
+        run, _runs,
+        session_factory=session_factory,
+        agent_registry=agent_registry,
+    ))
     task.add_done_callback(_handle_task_error)
     return _normalize_run(run)
 
@@ -603,6 +608,11 @@ async def rerun(
     _runs[new_run_id] = new_run
 
     session_factory = getattr(request.app.state, "db_session_factory", None)
-    task = asyncio.create_task(run_real_council(new_run, _runs, session_factory=session_factory))
+    agent_registry = getattr(request.app.state, "agent_registry", None)
+    task = asyncio.create_task(run_real_council(
+        new_run, _runs,
+        session_factory=session_factory,
+        agent_registry=agent_registry,
+    ))
     task.add_done_callback(_handle_task_error)
     return _normalize_run(new_run)

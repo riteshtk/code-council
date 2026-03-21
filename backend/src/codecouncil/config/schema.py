@@ -89,122 +89,13 @@ class AgentConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Per-agent configs
-# ---------------------------------------------------------------------------
-
-class ArchaeologistConfig(AgentConfig):
-    temperature: float = 0.3
-    max_tokens: int = 2000
-    focus_areas: dict[str, bool] = Field(
-        default_factory=lambda: {
-            "git_history": True,
-            "churn_analysis": True,
-            "bus_factor": True,
-            "dead_code": True,
-            "test_coverage": True,
-        }
-    )
-    thresholds: dict[str, float] = Field(
-        default_factory=lambda: {
-            "churn_high": 0.7,
-            "coverage_low": 0.4,
-            "bus_factor_critical": 1.5,
-        }
-    )
-
-
-class SkepticConfig(AgentConfig):
-    temperature: float = 0.2
-    max_tokens: int = 2000
-    can_deadlock: bool = True
-    deadlock_requires_evidence: bool = True
-    focus_areas: dict[str, bool] = Field(
-        default_factory=lambda: {
-            "security": True,
-            "performance": True,
-            "scalability": True,
-            "coupling": True,
-            "tech_debt": True,
-        }
-    )
-    thresholds: dict[str, float] = Field(
-        default_factory=lambda: {
-            "severity_deadlock": 0.9,
-            "severity_veto": 0.75,
-        }
-    )
-
-
-class VisionaryConfig(AgentConfig):
-    temperature: float = 0.7
-    max_tokens: int = 2500
-    max_proposals: int = 8
-    ambition_level: Literal["conservative", "moderate", "ambitious"] = "moderate"
-    focus_areas: dict[str, bool] = Field(
-        default_factory=lambda: {
-            "architecture": True,
-            "modernization": True,
-            "developer_experience": True,
-            "observability": True,
-            "automation": True,
-        }
-    )
-    thresholds: dict[str, float] = Field(
-        default_factory=lambda: {
-            "min_impact_score": 0.3,
-            "effort_ceiling": 0.9,
-        }
-    )
-
-
-class ScribeConfig(AgentConfig):
-    temperature: float = 0.1
-    max_tokens: int = 4000
-    output_format: Literal["markdown", "json", "html"] = "markdown"
-    preserve_dissent: bool = True
-    include_debate_excerpt: bool = True
-    excerpt_max_exchanges: int = 5
-    action_item_format: Literal["numbered", "bulleted", "table"] = "numbered"
-    rfc_sections: dict[str, bool] = Field(
-        default_factory=lambda: {
-            "executive_summary": True,
-            "findings": True,
-            "proposals": True,
-            "debate_summary": True,
-            "action_items": True,
-            "dissent": True,
-            "appendix": True,
-        }
-    )
-    focus_areas: dict[str, bool] = Field(
-        default_factory=lambda: {
-            "synthesis": True,
-            "action_items": True,
-            "dissent_capture": True,
-            "rfc_structure": True,
-        }
-    )
-
-
-# ---------------------------------------------------------------------------
-# Custom agent
-# ---------------------------------------------------------------------------
-
-class CustomAgentConfig(AgentConfig):
-    name: str = ""
-    role: str = ""
-
-
-# ---------------------------------------------------------------------------
 # Agents aggregator
 # ---------------------------------------------------------------------------
 
 class AgentsSettings(BaseModel):
-    archaeologist: ArchaeologistConfig = Field(default_factory=ArchaeologistConfig)
-    skeptic: SkepticConfig = Field(default_factory=SkepticConfig)
-    visionary: VisionaryConfig = Field(default_factory=VisionaryConfig)
-    scribe: ScribeConfig = Field(default_factory=ScribeConfig)
-    custom: list[CustomAgentConfig] = Field(default_factory=list)
+    """Generic per-agent overrides keyed by handle. Config for each agent
+    lives in AgentDefinition; this just captures user overrides."""
+    custom: list[AgentConfig] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

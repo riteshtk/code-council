@@ -6,10 +6,6 @@ from uuid import uuid4
 from codecouncil.agents.base import BaseAgent, DebateContext, AgentResponse
 from codecouncil.agents.definition import AgentDefinition
 from codecouncil.agents.registry import AgentRegistry
-from codecouncil.agents.archaeologist import Archaeologist
-from codecouncil.agents.skeptic import Skeptic
-from codecouncil.agents.visionary import Visionary
-from codecouncil.agents.scribe import Scribe
 from codecouncil.agents.memory import AgentMemoryManager
 from codecouncil.models.agents import DebateRole, AgentMemory
 from codecouncil.models.findings import Finding, Severity
@@ -63,19 +59,61 @@ def test_registry_list_all():
     assert len(registry.list_all()) == 2
 
 
-def test_agent_identities():
-    assert Archaeologist().identity.handle == "archaeologist"
-    assert Archaeologist().identity.color == "#d4a574"
-    assert Archaeologist().identity.debate_role == DebateRole.ANALYST
-    assert Skeptic().identity.handle == "skeptic"
-    assert Skeptic().identity.color == "#ff6b6b"
-    assert Skeptic().identity.debate_role == DebateRole.CHALLENGER
-    assert Visionary().identity.handle == "visionary"
-    assert Visionary().identity.color == "#6c5ce7"
-    assert Visionary().identity.debate_role == DebateRole.PROPOSER
-    assert Scribe().identity.handle == "scribe"
-    assert Scribe().identity.color == "#4ecdc4"
-    assert Scribe().identity.debate_role == DebateRole.SCRIBE
+def test_registry_discover_builtin():
+    """Registry discovers all 4 built-in agent definitions."""
+    registry = AgentRegistry()
+    registry.discover_builtin()
+    handles = [a.handle for a in registry.list_all()]
+    assert "archaeologist" in handles
+    assert "skeptic" in handles
+    assert "visionary" in handles
+    assert "scribe" in handles
+
+
+def test_builtin_agent_definitions():
+    """Built-in definitions have correct debate roles and properties."""
+    registry = AgentRegistry()
+    registry.discover_builtin()
+
+    arch = registry.get("archaeologist")
+    assert arch is not None
+    assert arch.debate_role == "analyst"
+    assert arch.is_builtin is True
+
+    skeptic = registry.get("skeptic")
+    assert skeptic is not None
+    assert skeptic.debate_role == "challenger"
+    assert skeptic.can_deadlock is True
+
+    visionary = registry.get("visionary")
+    assert visionary is not None
+    assert visionary.debate_role == "proposer"
+    assert visionary.can_propose is True
+
+    scribe = registry.get("scribe")
+    assert scribe is not None
+    assert scribe.debate_role == "scribe"
+    assert scribe.can_vote is False
+
+
+def test_definition_to_api_dict():
+    defn = _make_defn("archaeologist")
+    api = defn.to_api_dict()
+    assert api["handle"] == "archaeologist"
+    assert api["id"] == "archaeologist"
+    assert "name" in api
+    assert "color" in api
+    assert "debate_role" in api
+
+
+def test_definition_build_system_prompt():
+    defn = _make_defn("archaeologist")
+    defn.persona = "You are the Archaeologist."
+    defn.policies = {"evidence": "Always cite commits."}
+    prompt = defn.build_system_prompt(memory_context="High churn in auth module")
+    assert "Archaeologist" in prompt
+    assert "evidence" in prompt
+    assert "High churn" in prompt
 
 
 def test_parse_findings():
@@ -140,87 +178,23 @@ def test_analyst_agents_exclude_scribe():
     assert "scribe" not in handles
 
 
-@pytest.mark.asyncio
-async def test_archaeologist_analyze_with_mock():
-    provider = MockProvider("[FINDING:HIGH] High churn in core modules. Implication: Instability risk.")
-    agent = Archaeologist(provider=provider)
-    state = {
-        "run_id": str(uuid4()),
-        "repo_url": "https://github.com/test/repo",
-        "config": {},
-        "phase": "analysing",
-        "repo_context": {"file_tree": [], "summary_stats": {"total_files": 10}},
-        "findings": [], "proposals": [], "votes": [],
-        "debate_rounds": [], "opening_statements": [],
-        "rfc_content": "", "agent_memories": {},
-        "events": [], "cost_total": 0.0,
-        "human_review_pending": False, "cancelled": False,
-    }
-    findings = await agent.analyze(state)
-    assert len(findings) >= 1
-    assert findings[0].severity == Severity.HIGH
+def test_registry_unregister_custom():
+    registry = AgentRegistry()
+    defn = _make_defn("custom-agent")
+    defn.is_builtin = False
+    registry.register(defn)
+    assert registry.get("custom-agent") is not None
+    assert registry.unregister("custom-agent") is True
+    assert registry.get("custom-agent") is None
 
 
-def test_persona_prompts():
-    assert "evidence" in Archaeologist()._get_persona().lower() or "historian" in Archaeologist()._get_persona().lower()
-    assert "risk" in Skeptic()._get_persona().lower() or "challenge" in Skeptic()._get_persona().lower()
-    assert "proposal" in Visionary()._get_persona().lower() or "constructive" in Visionary()._get_persona().lower()
-    assert "neutral" in Scribe()._get_persona().lower() or "secretary" in Scribe()._get_persona().lower()
-
-
-@pytest.mark.asyncio
-async def test_scribe_analyze_returns_empty():
-    scribe = Scribe()
-    state = {
-        "run_id": str(uuid4()),
-        "repo_url": "https://github.com/test/repo",
-        "config": {},
-        "phase": "analysing",
-        "repo_context": {},
-        "findings": [], "proposals": [], "votes": [],
-        "debate_rounds": [], "opening_statements": [],
-        "rfc_content": "", "agent_memories": {},
-        "events": [], "cost_total": 0.0,
-        "human_review_pending": False, "cancelled": False,
-    }
-    findings = await scribe.analyze(state)
-    assert findings == []
-
-
-@pytest.mark.asyncio
-async def test_scribe_vote_always_abstains():
-    scribe = Scribe()
-    run_id = uuid4()
-    proposal_id = uuid4()
-    state = {
-        "run_id": str(run_id),
-        "repo_url": "https://github.com/test/repo",
-        "config": {},
-        "phase": "voting",
-        "repo_context": {},
-        "findings": [], "proposals": [], "votes": [],
-        "debate_rounds": [], "opening_statements": [],
-        "rfc_content": "", "agent_memories": {},
-        "events": [], "cost_total": 0.0,
-        "human_review_pending": False, "cancelled": False,
-    }
-    vote = await scribe.vote({"id": str(proposal_id), "title": "Test"}, state)
-    assert vote.vote == VoteType.ABSTAIN
-    assert vote.agent == "scribe"
-
-
-@pytest.mark.asyncio
-async def test_skeptic_declare_deadlock():
-    skeptic = Skeptic()
-    proposal = {"id": str(uuid4()), "title": "Dangerous refactor"}
-    result = await skeptic.declare_deadlock(proposal, "Migration history shows 3 prior failures.")
-    assert result["type"] == "DEADLOCK"
-    assert result["agent"] == "skeptic"
-    assert "failures" in result["evidence"]
-
-
-def test_skeptic_can_deadlock_flag():
-    assert Skeptic.can_deadlock is True
+def test_registry_unregister_builtin_fails():
+    registry = AgentRegistry()
+    defn = _make_defn("archaeologist")
+    defn.is_builtin = True
+    registry.register(defn)
+    assert registry.unregister("archaeologist") is False
+    assert registry.get("archaeologist") is not None
 
 
 @pytest.mark.asyncio
@@ -232,41 +206,17 @@ async def test_memory_manager_load_empty():
     assert memory.known_patterns == []
 
 
-@pytest.mark.asyncio
-async def test_visionary_analyze_with_mock():
-    provider = MockProvider("[FINDING:MEDIUM] Bounded context leakage in auth module. Implication: Coupling risk.")
-    agent = Visionary(provider=provider)
-    state = {
-        "run_id": str(uuid4()),
-        "repo_url": "https://github.com/test/repo",
-        "config": {},
-        "phase": "analysing",
-        "repo_context": {"file_tree": [], "summary_stats": {"total_files": 5}},
-        "findings": [], "proposals": [], "votes": [],
-        "debate_rounds": [], "opening_statements": [],
-        "rfc_content": "", "agent_memories": {},
-        "events": [], "cost_total": 0.0,
-        "human_review_pending": False, "cancelled": False,
-    }
-    findings = await agent.analyze(state)
-    assert isinstance(findings, list)
-
-
-def test_build_system_prompt_with_memory():
-    agent = Archaeologist()
-    agent.memory = AgentMemory(
-        agent_handle="archaeologist",
-        known_patterns=["High churn in auth module", "Bus factor 1 in payments"],
-        interpersonal_history=["Skeptic challenged auth findings in session 3"],
-    )
-    prompt = agent._build_system_prompt()
-    assert "High churn" in prompt
-    assert "Skeptic challenged" in prompt
-    assert "Memory" in prompt
-
-
 def test_parse_vote_abstain_default():
     text = "No clear vote marker here."
     vote = BaseAgent.parse_vote(text, "archaeologist", uuid4(), uuid4())
     assert vote.vote == VoteType.ABSTAIN
     assert vote.confidence == 0.5
+
+
+def test_persona_prompts_in_definitions():
+    """Built-in definitions have substantive persona text."""
+    registry = AgentRegistry()
+    registry.discover_builtin()
+    for defn in registry.list_all():
+        assert isinstance(defn.persona, str)
+        assert len(defn.persona) > 50, f"{defn.handle} persona too short"

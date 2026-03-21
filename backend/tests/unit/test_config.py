@@ -18,18 +18,15 @@ import yaml
 from pydantic import ValidationError
 
 from codecouncil.config.schema import (
+    AgentConfig,
     AgentsSettings,
-    ArchaeologistConfig,
     CouncilConfig,
     CouncilSettings,
     IngestConfig,
     LLMSettings,
     OutputConfig,
     ProviderConfig,
-    ScribeConfig,
-    SkepticConfig,
     UIConfig,
-    VisionaryConfig,
 )
 from codecouncil.config.loader import load_config
 
@@ -88,44 +85,16 @@ class TestDefaultConfig:
 # ---------------------------------------------------------------------------
 
 class TestAgentConfigDefaults:
-    def test_archaeologist_defaults(self):
-        cfg = ArchaeologistConfig()
-        assert cfg.temperature == 0.3
-        assert cfg.max_tokens == 2000
+    def test_generic_agent_config_defaults(self):
+        cfg = AgentConfig()
         assert cfg.enabled is True
+        assert cfg.temperature == 0.5
+        assert cfg.max_tokens == 2000
         assert cfg.streaming is True
         assert cfg.vote_weight == 1.0
 
-    def test_skeptic_defaults(self):
-        cfg = SkepticConfig()
-        assert cfg.temperature == 0.2
-        assert cfg.max_tokens == 2000
-        assert cfg.can_deadlock is True
-        assert cfg.deadlock_requires_evidence is True
-
-    def test_visionary_defaults(self):
-        cfg = VisionaryConfig()
-        assert cfg.temperature == 0.7
-        assert cfg.max_tokens == 2500
-        assert cfg.max_proposals == 8
-        assert cfg.ambition_level == "moderate"
-
-    def test_scribe_defaults(self):
-        cfg = ScribeConfig()
-        assert cfg.temperature == 0.1
-        assert cfg.max_tokens == 4000
-        assert cfg.output_format == "markdown"
-        assert cfg.preserve_dissent is True
-        assert cfg.include_debate_excerpt is True
-        assert cfg.excerpt_max_exchanges == 5
-        assert cfg.action_item_format == "numbered"
-
-    def test_all_agents_in_settings(self):
+    def test_agents_settings_has_custom_list(self):
         settings = AgentsSettings()
-        assert isinstance(settings.archaeologist, ArchaeologistConfig)
-        assert isinstance(settings.skeptic, SkepticConfig)
-        assert isinstance(settings.visionary, VisionaryConfig)
-        assert isinstance(settings.scribe, ScribeConfig)
         assert settings.custom == []
 
 
@@ -134,14 +103,10 @@ class TestAgentConfigDefaults:
 # ---------------------------------------------------------------------------
 
 class TestProviderInheritsDefault:
-    def test_agent_with_empty_provider_string(self):
-        """An agent with provider='' should be detectable so caller can fall back to default."""
-        cfg = CouncilConfig()
-        # By default all agents have provider="" which means "use default"
-        assert cfg.agents.archaeologist.provider == ""
-        assert cfg.agents.skeptic.provider == ""
-        assert cfg.agents.visionary.provider == ""
-        assert cfg.agents.scribe.provider == ""
+    def test_agent_config_empty_provider_string(self):
+        """An AgentConfig with provider='' should be detectable so caller can fall back to default."""
+        cfg = AgentConfig()
+        assert cfg.provider == ""
 
     def test_default_provider_in_llm(self):
         llm = LLMSettings()
@@ -201,7 +166,7 @@ class TestVoteThresholdRange:
 
     def test_vote_weight_below_zero_rejected(self):
         with pytest.raises(ValidationError):
-            ArchaeologistConfig(vote_weight=-1.0)
+            AgentConfig(vote_weight=-1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -390,45 +355,18 @@ class TestConfigLayerPrecedence:
 
 
 # ---------------------------------------------------------------------------
-# Personas
+# Personas (now live in AgentDefinition via registry)
 # ---------------------------------------------------------------------------
 
 class TestPersonas:
-    def test_persona_strings_exist(self):
-        from codecouncil.config.defaults import (
-            ARCHAEOLOGIST_PERSONA,
-            SCRIBE_PERSONA,
-            SKEPTIC_PERSONA,
-            VISIONARY_PERSONA,
-        )
-        for persona in (
-            ARCHAEOLOGIST_PERSONA,
-            SKEPTIC_PERSONA,
-            VISIONARY_PERSONA,
-            SCRIBE_PERSONA,
-        ):
-            assert isinstance(persona, str)
-            assert len(persona) > 100  # substantive content
+    def test_persona_strings_in_definitions(self):
+        from codecouncil.agents.registry import AgentRegistry
 
-    def test_archaeologist_persona_is_data_first(self):
-        from codecouncil.config.defaults import ARCHAEOLOGIST_PERSONA
-        # Should mention data / commits / historical focus
-        lower = ARCHAEOLOGIST_PERSONA.lower()
-        assert any(word in lower for word in ("commit", "data", "history", "historical", "codebase"))
-
-    def test_skeptic_persona_mentions_deadlock(self):
-        from codecouncil.config.defaults import SKEPTIC_PERSONA
-        assert "deadlock" in SKEPTIC_PERSONA.upper() or "DEADLOCK" in SKEPTIC_PERSONA
-
-    def test_visionary_persona_mentions_proposals(self):
-        from codecouncil.config.defaults import VISIONARY_PERSONA
-        lower = VISIONARY_PERSONA.lower()
-        assert any(word in lower for word in ("proposal", "propose", "vision", "future", "improve"))
-
-    def test_scribe_persona_is_neutral(self):
-        from codecouncil.config.defaults import SCRIBE_PERSONA
-        lower = SCRIBE_PERSONA.lower()
-        assert any(word in lower for word in ("neutral", "witness", "quote", "rfc", "record", "vote"))
+        registry = AgentRegistry()
+        registry.discover_builtin()
+        for defn in registry.list_all():
+            assert isinstance(defn.persona, str)
+            assert len(defn.persona) > 100, f"{defn.handle} persona too short"
 
 
 # ---------------------------------------------------------------------------

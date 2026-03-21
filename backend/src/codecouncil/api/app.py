@@ -41,9 +41,28 @@ def create_app() -> FastAPI:
         from codecouncil.providers.registry import ProviderRegistry
         app.state.provider_registry = ProviderRegistry()
 
-        # AgentRegistry (empty at boot; populated per-run)
+        # AgentRegistry — discover built-in + load custom from DB
         from codecouncil.agents.registry import AgentRegistry
-        app.state.agent_registry = AgentRegistry()
+
+        registry = AgentRegistry()
+        registry.discover_builtin()
+        if app.state.db_session_factory:
+            await registry.load_custom_from_db(app.state.db_session_factory)
+        app.state.agent_registry = registry
+
+        # Mark interrupted runs on startup
+        if app.state.db_session_factory:
+            try:
+                async with app.state.db_session_factory() as db:
+                    from sqlalchemy import text
+                    result = await db.execute(
+                        text("UPDATE runs SET status='interrupted', phase='error' WHERE status='running'")
+                    )
+                    if result.rowcount > 0:
+                        logger.info("Marked %d interrupted runs", result.rowcount)
+                    await db.commit()
+            except Exception as exc:
+                logger.warning("Failed to mark interrupted runs: %s", exc)
 
         logger.info("CodeCouncil API ready.")
         yield

@@ -10,18 +10,13 @@ from codecouncil.config.loader import load_config
 from codecouncil.config.schema import (
     AgentConfig,
     AgentsSettings,
-    ArchaeologistConfig,
     CouncilConfig,
     CouncilSettings,
-    CustomAgentConfig,
     IngestConfig,
     LLMSettings,
     OutputConfig,
     ProviderConfig,
-    ScribeConfig,
-    SkepticConfig,
     UIConfig,
-    VisionaryConfig,
 )
 
 __all__ = [
@@ -32,11 +27,6 @@ __all__ = [
     "ProviderConfig",
     "AgentConfig",
     "AgentsSettings",
-    "ArchaeologistConfig",
-    "SkepticConfig",
-    "VisionaryConfig",
-    "ScribeConfig",
-    "CustomAgentConfig",
     "IngestConfig",
     "OutputConfig",
     "UIConfig",
