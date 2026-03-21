@@ -451,7 +451,7 @@ class DebateTopology:
 |----------|-----------|------------|-----------------|
 | Adversarial (default) | Visionary presents → Skeptic challenges → Visionary responds → Others → Skeptic final word | Skeptic can deadlock | All proposals addressed or max rounds |
 | Collaborative | Arch → Visionary → Skeptic (must include mitigations) → consensus check | None | Modified consensus or max rounds |
-| Socratic | Moderator questions each agent in turn. Agents speak only when addressed. | Only Moderator | Moderator declares complete |
+| Socratic | Topology engine acts as Moderator (no separate agent needed) — questions each agent in turn. Agents speak only when addressed. | Only Moderator (engine) | All agents questioned on all proposals |
 | Open Floor | Any agent responds to any other. Max 1 response per agent per turn. | All agents | Timer or max responses |
 | Panel | Fixed rotation per proposal. No interruptions. | None | All agents spoken |
 | Custom | User-defined YAML steps with conditions | Per step config | All steps executed |
@@ -557,6 +557,7 @@ Try primary → on failure (timeout, rate limit, error) → log fallback event �
 | ast_parser | Tree-sitter → function/class inventory, import graph, circular deps, LOC, complexity |
 | dependency | Parse manifests → package list with current vs latest version |
 | cve | OSV.dev /v1/querybatch API → vulnerabilities per package |
+| test_coverage | Detect test files, compute test-to-source ratio, parse coverage files (.coverage, lcov.info) if present |
 | secrets | Regex patterns for AWS keys, API tokens, passwords. Results hashed. |
 | licence | Detect licence type, flag incompatibilities |
 
@@ -842,16 +843,17 @@ Strictly sequential, each step complete before next:
 2. Project scaffold (full directory tree, pyproject.toml, package.json, Makefile, .env.example)
 3. Config system (schema, loader, defaults, 4 persona prompts)
 4. Data models (all Pydantic models)
-5. Event system (EventBus, persistence, WebSocket/SSE publishers)
-6. Provider system (interface, 7 implementations, fallback, cost tracking)
-7. Ingestion system (source adapters, all analyzers, incremental diffing)
-8. Agent system (BaseAgent, 4 agents, streaming, memory)
-9. Debate topologies (5 built-in + custom, registry)
-10. LangGraph graph (all nodes, edges, checkpointing, HITL)
-11. Output system (RFC renderers, templates, action items, cost report)
-12. API server (all routes, WebSocket, SSE, middleware, health, metrics)
-13. CLI (all commands, Rich terminal UI)
-14. React UI (all pages, components, Zustand, WebSocket manager)
-15. Database (migrations, tables, indexes, pooling)
-16. Tests (unit + integration)
-17. README.md
+5. Database foundation (SQLAlchemy engine, ORM models, initial Alembic migration with all tables — needed by steps 6-12)
+6. Event system (EventBus, persistence to DB, WebSocket/SSE publishers)
+7. Provider system (interface, 7 implementations, fallback, cost tracking)
+8. Ingestion system (source adapters, all analyzers, incremental diffing)
+9. Agent system (BaseAgent, 4 agents, streaming, memory)
+10. Debate topologies (5 built-in + custom, registry)
+11. LangGraph graph (all nodes, edges, checkpointing, HITL)
+12. Output system (RFC renderers, templates, action items, cost report)
+13. API server (all routes, WebSocket, SSE, middleware, health, metrics)
+14. CLI (all commands, Rich terminal UI)
+15. React UI (all pages, components, Zustand, WebSocket manager)
+16. Database finalization (indexes, connection pooling tuning, seed data)
+17. Tests (unit + integration)
+18. README.md
