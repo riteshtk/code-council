@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { listRuns, deleteRun, clearAgentMemory } from "@/lib/api";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { listRuns, deleteRun, clearAgentMemory, getRFC } from "@/lib/api";
 import type { RunSummary } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -13,6 +15,8 @@ import {
   Clock,
   BarChart3,
   ChevronRight,
+  X,
+  GitCompare,
 } from "lucide-react";
 import { cn, formatCost, timeAgo } from "@/lib/utils";
 import { toast } from "sonner";
@@ -53,6 +57,9 @@ export default function SessionsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [compareData, setCompareData] = useState<{ left: { run: RunSummary; rfc: string }; right: { run: RunSummary; rfc: string } } | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
 
   useEffect(() => { loadRuns(); }, []);
 
@@ -65,6 +72,32 @@ export default function SessionsPage() {
       setRuns([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleCompare() {
+    const ids = [...selected];
+    if (ids.length !== 2) {
+      toast.error("Select exactly 2 sessions to compare");
+      return;
+    }
+    setCompareLoading(true);
+    try {
+      const [rfc1, rfc2] = await Promise.all([
+        getRFC(ids[0], "markdown").then((r) => typeof r === "string" ? r : JSON.stringify(r, null, 2)),
+        getRFC(ids[1], "markdown").then((r) => typeof r === "string" ? r : JSON.stringify(r, null, 2)),
+      ]);
+      const run1 = runs.find((r) => r.id === ids[0])!;
+      const run2 = runs.find((r) => r.id === ids[1])!;
+      setCompareData({
+        left: { run: run1, rfc: rfc1 as string },
+        right: { run: run2, rfc: rfc2 as string },
+      });
+      setComparing(true);
+    } catch (e) {
+      toast.error(`Failed to load RFCs for comparison: ${e}`);
+    } finally {
+      setCompareLoading(false);
     }
   }
 
@@ -144,7 +177,8 @@ export default function SessionsPage() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-[var(--cc-text)]">Council Sessions</h1>
         <button
-          onClick={() => {/* compare handler */}}
+          disabled={selected.size !== 2 || compareLoading}
+          onClick={handleCompare}
           className="py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-accent)] rounded-lg text-[var(--cc-accent)] text-[13px] font-semibold cursor-pointer hover:bg-[var(--cc-accent-muted)] transition-colors duration-200"
         >
           Compare Selected ({selected.size})
@@ -416,6 +450,71 @@ export default function SessionsPage() {
           })}
         </div>
       </div>
+
+      {/* ═══ Compare Modal ═══ */}
+      {comparing && compareData && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center pt-8 pb-8">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setComparing(false)}
+          />
+
+          {/* Modal */}
+          <div className="relative w-[95vw] max-h-[90vh] bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-fade-in">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--cc-border)] shrink-0">
+              <div className="flex items-center gap-3">
+                <GitCompare className="w-5 h-5 text-[var(--cc-accent)]" />
+                <h2 className="text-lg font-bold text-[var(--cc-text)]">RFC Comparison</h2>
+              </div>
+              <button
+                onClick={() => setComparing(false)}
+                className="p-2 rounded-lg hover:bg-[var(--cc-bg-hover)] transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5 text-[var(--cc-text-muted)]" />
+              </button>
+            </div>
+
+            {/* Side-by-side content */}
+            <div className="flex-1 overflow-hidden grid grid-cols-2 divide-x divide-[var(--cc-border)]">
+              {/* Left RFC */}
+              <div className="flex flex-col overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--cc-border)] bg-[var(--cc-bg-card)] shrink-0">
+                  <div className="text-sm font-semibold text-[var(--cc-text)]">
+                    {compareData.left.run.repo?.url?.split("/").slice(-1)[0] || "Run A"}
+                  </div>
+                  <div className="text-xs text-[var(--cc-text-muted)]">
+                    {timeAgo(compareData.left.run.created_at)} · {formatCost(compareData.left.run.total_cost)} · {compareData.left.run.finding_count} findings
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 prose-agent text-sm">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {compareData.left.rfc}
+                  </ReactMarkdown>
+                </div>
+              </div>
+
+              {/* Right RFC */}
+              <div className="flex flex-col overflow-hidden">
+                <div className="px-4 py-3 border-b border-[var(--cc-border)] bg-[var(--cc-bg-card)] shrink-0">
+                  <div className="text-sm font-semibold text-[var(--cc-text)]">
+                    {compareData.right.run.repo?.url?.split("/").slice(-1)[0] || "Run B"}
+                  </div>
+                  <div className="text-xs text-[var(--cc-text-muted)]">
+                    {timeAgo(compareData.right.run.created_at)} · {formatCost(compareData.right.run.total_cost)} · {compareData.right.run.finding_count} findings
+                  </div>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 prose-agent text-sm">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {compareData.right.rfc}
+                  </ReactMarkdown>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
