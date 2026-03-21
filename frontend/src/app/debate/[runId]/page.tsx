@@ -330,33 +330,6 @@ export default function DebatePage() {
         )}
       </div>
 
-      {/* ═══════ COMPLETION SUMMARY ═══════ */}
-      {run?.status === "completed" && (
-        <div className="mx-4 mt-3 p-4 rounded-xl bg-[var(--cc-bg-card)] border border-[var(--cc-green)] border-opacity-30 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <CheckCircle2 className="w-5 h-5 text-[var(--cc-green)]" />
-              <span className="text-sm font-semibold text-[var(--cc-text)]">Analysis Complete</span>
-            </div>
-            <div className="flex gap-6 text-xs text-[var(--cc-text-muted)] ml-8">
-              <span>{findings.length} findings</span>
-              <span>{proposals.length} proposals ({proposals.filter(p => p.status === "accepted").length} passed)</span>
-              <span>Consensus: {(run as any).consensus_score || 0}%</span>
-              <span>Cost: {formatCost((run as any).total_cost)}</span>
-            </div>
-          </div>
-          <Link
-            href={`/rfc/${runId}`}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold text-white transition-all duration-200 hover-lift shrink-0"
-            style={{ backgroundColor: "var(--cc-accent)", boxShadow: "0 2px 12px var(--cc-accent-glow)" }}
-          >
-            <FileText className="w-4 h-4" />
-            View RFC Report
-            <ExternalLink className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      )}
-
       {/* ═══════ MAIN 3-COLUMN GRID + BOTTOM ═══════ */}
       <div
         className="flex-1 min-h-0"
