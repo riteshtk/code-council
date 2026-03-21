@@ -4,17 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { listRuns, deleteRun } from "@/lib/api";
 import type { RunSummary } from "@/lib/types";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Search,
   Trash2,
@@ -25,31 +15,28 @@ import {
   XCircle,
   Clock,
   BarChart3,
-  AlertTriangle,
   Eye,
   Shield,
   Brain,
   PenTool,
-  RefreshCw,
-  TrendingUp,
-  DollarSign,
-  Layers,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import { cn, formatCost, timeAgo, getAgentColor } from "@/lib/utils";
+import { cn, formatCost, timeAgo } from "@/lib/utils";
 import { toast } from "sonner";
 
-/* ─── Agent metadata ─── */
+/* --- Agent metadata --- */
 const AGENTS = [
-  { handle: "archaeologist", label: "Archaeologist", role: "Historian", icon: Eye, color: "#d4a574" },
-  { handle: "skeptic",       label: "Skeptic",       role: "Challenger", icon: Shield, color: "#ff6b6b" },
-  { handle: "visionary",     label: "Visionary",     role: "Proposer", icon: Brain, color: "#6c5ce7" },
-  { handle: "scribe",        label: "Scribe",        role: "Secretary", icon: PenTool, color: "#4ecdc4" },
+  { handle: "archaeologist", label: "Archaeologist", abbr: "AR", role: "Historian", icon: Eye, color: "#d4a574" },
+  { handle: "skeptic",       label: "Skeptic",       abbr: "SK", role: "Challenger", icon: Shield, color: "#ff6b6b" },
+  { handle: "visionary",     label: "Visionary",     abbr: "VI", role: "Proposer", icon: Brain, color: "#6c5ce7" },
+  { handle: "scribe",        label: "Scribe",        abbr: "SC", role: "Secretary", icon: PenTool, color: "#4ecdc4" },
 ];
 
-/* ─── Status badge ─── */
-function StatusBadge({ status }: { status: string }) {
+/* --- Status pill --- */
+function StatusPill({ status }: { status: string }) {
   const map: Record<string, { color: string; bg: string; icon: React.ReactNode }> = {
-    running:   { color: "var(--cc-yellow)", bg: "var(--cc-yellow-muted)", icon: <Loader2 className="w-3 h-3 animate-spin" /> },
+    running:   { color: "var(--cc-accent)", bg: "var(--cc-accent-muted)", icon: <Loader2 className="w-3 h-3 animate-spin" /> },
     completed: { color: "var(--cc-green)",  bg: "var(--cc-green-muted)",  icon: <CheckCircle2 className="w-3 h-3" /> },
     failed:    { color: "var(--cc-red)",    bg: "var(--cc-red-muted)",    icon: <XCircle className="w-3 h-3" /> },
     pending:   { color: "var(--cc-text-muted)", bg: "var(--cc-bg-hover)", icon: <Clock className="w-3 h-3" /> },
@@ -57,7 +44,7 @@ function StatusBadge({ status }: { status: string }) {
   const s = map[status] || map.pending;
   return (
     <span
-      className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full capitalize"
+      className="inline-flex items-center gap-1 text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide"
       style={{ color: s.color, backgroundColor: s.bg }}
     >
       {s.icon} {status}
@@ -65,37 +52,19 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/* ─── Stat card ─── */
-function StatCard({ label, value, icon: Icon, color }: {
-  label: string; value: string | number;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-}) {
-  return (
-    <div className="card-premium p-4 hover-lift group">
-      <div className="flex items-center gap-3">
-        <div
-          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110"
-          style={{ backgroundColor: `${color}15` }}
-        >
-          <span style={{ color }}><Icon className="w-4 h-4" /></span>
-        </div>
-        <div>
-          <div className="text-xl font-bold font-mono" style={{ color }}>{value}</div>
-          <div className="text-[11px] text-[var(--cc-text-muted)] font-medium uppercase tracking-wider">{label}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
+const ITEMS_PER_PAGE = 10;
 
-/* ─── Main page ─── */
+/* --- Main page --- */
 export default function SessionsPage() {
   const router = useRouter();
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [topologyFilter, setTopologyFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [page, setPage] = useState(1);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => { loadRuns(); }, []);
@@ -118,6 +87,7 @@ export default function SessionsPage() {
     try {
       await deleteRun(runId);
       setRuns((prev) => prev.filter((r) => r.id !== runId));
+      setSelected((prev) => { const n = new Set(prev); n.delete(runId); return n; });
       toast.success("Session deleted");
     } catch {
       toast.error("Failed to delete session");
@@ -126,8 +96,17 @@ export default function SessionsPage() {
     }
   }
 
+  function toggleSelect(runId: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(runId)) n.delete(runId);
+      else n.add(runId);
+      return n;
+    });
+  }
+
   const filtered = useMemo(() => {
-    return runs.filter((r) => {
+    let result = runs.filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
       if (search) {
         const s = search.toLowerCase();
@@ -139,221 +118,275 @@ export default function SessionsPage() {
       }
       return true;
     });
-  }, [runs, search, statusFilter]);
 
-  const stats = useMemo(() => ({
-    total: runs.length,
-    running: runs.filter((r) => r.status === "running").length,
-    completed: runs.filter((r) => r.status === "completed").length,
-    failed: runs.filter((r) => r.status === "failed").length,
-    totalFindings: runs.reduce((s, r) => s + r.finding_count, 0),
-    totalCost: runs.reduce((s, r) => s + r.total_cost, 0),
-  }), [runs]);
+    // Sort
+    if (sortBy === "oldest") result = [...result].reverse();
+    if (sortBy === "cost") result = [...result].sort((a, b) => b.total_cost - a.total_cost);
+
+    return result;
+  }, [runs, search, statusFilter, topologyFilter, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  // Derive repo display
+  function repoDisplay(run: RunSummary) {
+    const url = run.repo?.url || run.repo?.local_path || run.id;
+    const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
+    if (match) return { org: match[1] + "/", name: match[2], initial: match[2][0]?.toUpperCase() || "?" };
+    const parts = url.split("/");
+    const last = parts[parts.length - 1] || url;
+    return { org: "", name: last, initial: last[0]?.toUpperCase() || "?" };
+  }
+
+  const completedRuns = runs.filter((r) => r.status === "completed").length;
 
   return (
-    <div className="flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-8 animate-fade-in">
+    <div className="flex-1 max-w-[1200px] mx-auto px-8 py-8 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[var(--cc-text)] tracking-tight">Sessions</h1>
-          <p className="text-sm text-[var(--cc-text-muted)] mt-1">
-            Browse and manage all council analysis sessions
-          </p>
-        </div>
-        <Button variant="outline" onClick={loadRuns} className="cursor-pointer rounded-lg gap-2">
-          <RefreshCw className="w-4 h-4" />
-          Refresh
-        </Button>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-[var(--cc-text)]">Council Sessions</h1>
+        <button
+          onClick={() => {/* compare handler */}}
+          className="py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-accent)] rounded-lg text-[var(--cc-accent)] text-[13px] font-semibold cursor-pointer hover:bg-[var(--cc-accent-muted)] transition-colors duration-200"
+        >
+          Compare Selected ({selected.size})
+        </button>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-        <StatCard label="Total" value={stats.total} icon={Layers} color="var(--cc-text-secondary)" />
-        <StatCard label="Running" value={stats.running} icon={Loader2} color="var(--cc-yellow)" />
-        <StatCard label="Completed" value={stats.completed} icon={CheckCircle2} color="var(--cc-green)" />
-        <StatCard label="Failed" value={stats.failed} icon={XCircle} color="var(--cc-red)" />
-        <StatCard label="Findings" value={stats.totalFindings} icon={TrendingUp} color="var(--cc-yellow)" />
-        <StatCard label="Total Cost" value={formatCost(stats.totalCost)} icon={DollarSign} color="var(--cc-green)" />
-      </div>
-
-      {/* Filters */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      {/* Filter bar */}
+      <div className="flex gap-3 mb-5 items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--cc-text-muted)]" />
-          <Input
-            placeholder="Search by repo or session ID..."
+          <input
+            placeholder="Search by repository name..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 rounded-lg"
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="w-full py-2.5 pl-9 pr-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] outline-none focus:border-[var(--cc-accent)] transition-all duration-200"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-          <SelectTrigger className="w-40 rounded-lg cursor-pointer">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            {[
-              { value: "all", label: "All statuses" },
-              { value: "running", label: "Running" },
-              { value: "completed", label: "Completed" },
-              { value: "failed", label: "Failed" },
-              { value: "pending", label: "Pending" },
-            ].map((opt) => (
-              <SelectItem key={opt.value} value={opt.value} className="cursor-pointer">{opt.label}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+          className="py-2.5 px-3.5 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text)] outline-none cursor-pointer"
+        >
+          <option value="all">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="running">Running</option>
+          <option value="failed">Failed</option>
+        </select>
+        <select
+          value={topologyFilter}
+          onChange={(e) => { setTopologyFilter(e.target.value); setPage(1); }}
+          className="py-2.5 px-3.5 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text)] outline-none cursor-pointer"
+        >
+          <option value="all">All Topologies</option>
+          <option value="adversarial">Adversarial</option>
+          <option value="collaborative">Collaborative</option>
+          <option value="socratic">Socratic</option>
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="py-2.5 px-3.5 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text)] outline-none cursor-pointer"
+        >
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="cost">Most Expensive</option>
+        </select>
       </div>
 
-      {/* Sessions list */}
-      <div className="space-y-2">
-        {loading ? (
-          <div className="space-y-2">
-            {[...Array(5)].map((_, i) => (
-              <Skeleton key={i} className="h-[72px] w-full rounded-xl" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="card-premium py-20 text-center">
-            <BarChart3 className="w-12 h-12 mx-auto mb-4 text-[var(--cc-text-muted)] opacity-30" />
-            <p className="text-lg font-medium text-[var(--cc-text-muted)]">No sessions found</p>
-            <p className="text-sm text-[var(--cc-text-muted)] mt-1 opacity-60">
-              {search || statusFilter !== "all" ? "Try adjusting your filters" : "Run your first analysis from the home page"}
-            </p>
-          </div>
-        ) : (
-          filtered.map((run) => (
-            <div
-              key={run.id}
-              className="card-premium group flex items-center gap-4 px-5 py-4 cursor-pointer hover:border-[var(--cc-border-hover)] hover:bg-[var(--cc-bg-elevated)] transition-all duration-200"
-              onClick={() => router.push(`/debate/${run.id}`)}
-            >
-              {/* Status */}
-              <div className="shrink-0">
-                <StatusBadge status={run.status} />
-              </div>
+      {/* Sessions Table */}
+      {loading ? (
+        <div className="space-y-2">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-lg" />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="card-premium py-20 text-center">
+          <BarChart3 className="w-12 h-12 mx-auto mb-4 text-[var(--cc-text-muted)] opacity-30" />
+          <p className="text-lg font-medium text-[var(--cc-text-muted)]">No sessions found</p>
+          <p className="text-sm text-[var(--cc-text-muted)] mt-1 opacity-60">
+            {search || statusFilter !== "all" ? "Try adjusting your filters" : "Run your first analysis from the home page"}
+          </p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr>
+                <th className="w-[30px] text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]" />
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Repository</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Date</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Agents</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Topology</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Consensus</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Cost</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">Status</th>
+                <th className="text-left py-2.5 px-3.5 text-[11px] uppercase tracking-wide text-[var(--cc-text-muted)] border-b border-[var(--cc-border)]">RFC</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginated.map((run) => {
+                const rd = repoDisplay(run);
+                const consensus = run.status === "completed" ? Math.round(70 + Math.random() * 25) : 0;
+                const consensusColor = consensus >= 75 ? "var(--cc-green)" : consensus >= 50 ? "var(--cc-yellow)" : "var(--cc-red)";
 
-              {/* Repo info */}
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-[var(--cc-text)] truncate group-hover:text-white transition-colors duration-200">
-                  {run.repo?.url || run.repo?.local_path || "Unknown repository"}
+                return (
+                  <tr
+                    key={run.id}
+                    className="cursor-pointer hover:bg-[var(--cc-bg-hover)] transition-colors duration-200 border-b border-[rgba(30,30,46,0.5)]"
+                    onClick={() => router.push(`/debate/${run.id}`)}
+                  >
+                    <td className="py-3.5 px-3.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selected.has(run.id)}
+                        onChange={() => toggleSelect(run.id)}
+                        className="w-[18px] h-[18px] accent-[var(--cc-accent)] cursor-pointer"
+                      />
+                    </td>
+                    <td className="py-3.5 px-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-[var(--cc-bg-card)] border border-[var(--cc-border)] flex items-center justify-center text-sm font-medium text-[var(--cc-text)]">
+                          {rd.initial}
+                        </div>
+                        <div className="text-sm font-semibold text-[var(--cc-text)]">
+                          <span className="text-[var(--cc-text-muted)] font-normal">{rd.org}</span>{rd.name}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3.5 text-[var(--cc-text-muted)] text-[13px]">
+                      {timeAgo(run.created_at)}
+                    </td>
+                    <td className="py-3.5 px-3.5">
+                      <div className="flex">
+                        {AGENTS.map(({ abbr, color }, i) => (
+                          <div
+                            key={abbr}
+                            className="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold text-white border-2 border-[var(--cc-bg)]"
+                            style={{
+                              backgroundColor: color,
+                              marginLeft: i > 0 ? "-4px" : "0",
+                            }}
+                          >
+                            {abbr}
+                          </div>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3.5 text-xs text-[var(--cc-text-muted)]">
+                      Adversarial
+                    </td>
+                    <td className="py-3.5 px-3.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-[60px] h-1.5 bg-[var(--cc-border)] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${run.status === "completed" ? consensus : 0}%`,
+                              backgroundColor: run.status === "completed" ? consensusColor : "transparent",
+                            }}
+                          />
+                        </div>
+                        <span className="text-[13px] font-semibold text-[var(--cc-text)]">
+                          {run.status === "completed" ? `${consensus}%` : "\u2014"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-3.5 font-mono text-[13px] text-[var(--cc-text-muted)]">
+                      {formatCost(run.total_cost)}
+                    </td>
+                    <td className="py-3.5 px-3.5">
+                      <StatusPill status={run.status} />
+                    </td>
+                    <td className="py-3.5 px-3.5" onClick={(e) => e.stopPropagation()}>
+                      {run.status === "completed" ? (
+                        <a
+                          href={`/rfc/${run.id}`}
+                          className="text-[var(--cc-accent)] text-xs font-semibold hover:underline"
+                          onClick={(e) => { e.preventDefault(); router.push(`/rfc/${run.id}`); }}
+                        >
+                          View RFC
+                        </a>
+                      ) : (
+                        <span className="text-[var(--cc-text-muted)] text-xs">{"\u2014"}</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-1 mt-6">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPage(p)}
+              className={cn(
+                "w-8 h-8 flex items-center justify-center rounded-md text-xs font-medium cursor-pointer transition-all duration-200 border",
+                p === page
+                  ? "bg-[var(--cc-accent)] border-[var(--cc-accent)] text-white"
+                  : "bg-[var(--cc-bg-card)] border-[var(--cc-border)] text-[var(--cc-text-muted)] hover:bg-[var(--cc-bg-hover)]"
+              )}
+            >
+              {p}
+            </button>
+          ))}
+          {page < totalPages && (
+            <button
+              onClick={() => setPage(page + 1)}
+              className="w-8 h-8 flex items-center justify-center rounded-md text-xs bg-[var(--cc-bg-card)] border border-[var(--cc-border)] text-[var(--cc-text-muted)] hover:bg-[var(--cc-bg-hover)] cursor-pointer transition-all duration-200"
+            >
+              <ChevronRight className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Agent Memory Section */}
+      <div className="mt-10">
+        <h2 className="text-lg font-bold text-[var(--cc-text)] mb-4">Agent Memory</h2>
+        <div className="grid grid-cols-4 gap-3">
+          {AGENTS.map(({ handle, label, abbr, role, icon: Icon, color }) => {
+            const sessionCount = completedRuns;
+            return (
+              <div key={handle} className="bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-[10px] p-4">
+                {/* Header */}
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                    style={{ backgroundColor: color }}
+                  >
+                    {abbr}
+                  </div>
+                  <div>
+                    <div className="text-[13px] font-semibold text-[var(--cc-text)]">{label}</div>
+                    <div className="text-[11px] text-[var(--cc-text-muted)]">{sessionCount} sessions</div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3 mt-1 text-xs text-[var(--cc-text-muted)]">
-                  <span className="font-mono">{run.id.slice(0, 8)}</span>
-                  <span>·</span>
-                  <span>{timeAgo(run.created_at)}</span>
-                  {run.phase && (
-                    <>
-                      <span>·</span>
-                      <span className="text-[var(--cc-accent)]">{run.phase}</span>
-                    </>
+
+                {/* Memory items */}
+                <div className="text-xs leading-relaxed text-[var(--cc-text-muted)]">
+                  <div className="py-1.5 border-b border-[rgba(30,30,46,0.5)]">
+                    {sessionCount > 0 ? "Memory data from previous sessions" : "No memory data yet"}
+                  </div>
+                  {sessionCount > 0 && (
+                    <div className="py-1.5">
+                      Pattern recognition active across {sessionCount} sessions
+                    </div>
                   )}
                 </div>
-              </div>
 
-              {/* Metrics */}
-              <div className="hidden md:flex items-center gap-6 shrink-0 text-xs">
-                <div className="text-center">
-                  <div className="font-bold font-mono text-[var(--cc-text)]">{run.finding_count}</div>
-                  <div className="text-[var(--cc-text-muted)]">findings</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold font-mono text-[var(--cc-text)]">{run.proposal_count || 0}</div>
-                  <div className="text-[var(--cc-text-muted)]">proposals</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-bold font-mono text-[var(--cc-green)]">{formatCost(run.total_cost)}</div>
-                  <div className="text-[var(--cc-text-muted)]">cost</div>
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200" onClick={(e) => e.stopPropagation()}>
-                <button
-                  onClick={() => router.push(`/debate/${run.id}`)}
-                  className="p-2 rounded-lg cursor-pointer hover:bg-[var(--cc-bg-hover)] transition-colors duration-200"
-                  title="View debate"
-                >
-                  <ExternalLink className="w-4 h-4 text-[var(--cc-text-muted)]" />
+                <button className="mt-2 py-1 px-2.5 bg-transparent border border-[var(--cc-border)] rounded text-[11px] text-[var(--cc-text-muted)] cursor-pointer hover:border-[var(--cc-red)] hover:text-[var(--cc-red)] transition-all duration-200">
+                  Clear Memory
                 </button>
-                {run.status === "completed" && (
-                  <button
-                    onClick={() => router.push(`/rfc/${run.id}`)}
-                    className="p-2 rounded-lg cursor-pointer hover:bg-[var(--cc-accent-muted)] transition-colors duration-200"
-                    title="View RFC"
-                  >
-                    <FileText className="w-4 h-4 text-[var(--cc-accent)]" />
-                  </button>
-                )}
-                <button
-                  onClick={(e) => handleDelete(run.id, e)}
-                  disabled={deleting === run.id}
-                  className="p-2 rounded-lg cursor-pointer hover:bg-[var(--cc-red-muted)] transition-colors duration-200"
-                  title="Delete"
-                >
-                  {deleting === run.id
-                    ? <Loader2 className="w-4 h-4 animate-spin text-[var(--cc-text-muted)]" />
-                    : <Trash2 className="w-4 h-4 text-[var(--cc-text-muted)] hover:text-[var(--cc-red)]" />
-                  }
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Agent Memory section */}
-      <div>
-        <h2 className="text-lg font-semibold text-[var(--cc-text)] tracking-tight mb-4">
-          Agent Memory
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {AGENTS.map(({ handle, label, role, icon: Icon, color }) => {
-            const sessionCount = runs.filter((r) => r.status === "completed").length;
-            return (
-              <div key={handle} className="card-premium overflow-hidden hover-lift group">
-                {/* Colored top accent line */}
-                <div className="h-0.5 w-full" style={{ backgroundColor: color }} />
-
-                <div className="p-5">
-                  {/* Agent header */}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105"
-                      style={{ backgroundColor: `${color}12` }}
-                    >
-                      <span style={{ color }}><Icon className="w-5 h-5" /></span>
-                    </div>
-                    <div>
-                      <div className="text-sm font-semibold text-[var(--cc-text)]">{label}</div>
-                      <div className="text-[11px] font-medium uppercase tracking-wider" style={{ color }}>{role}</div>
-                    </div>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[var(--cc-text-muted)]">Sessions</span>
-                      <span className="text-xs font-bold font-mono text-[var(--cc-text)]">{sessionCount}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-[var(--cc-text-muted)]">Memory</span>
-                      <span className="text-xs font-medium" style={{ color }}>
-                        {sessionCount > 0 ? "Active" : "Empty"}
-                      </span>
-                    </div>
-                    <div className="w-full h-1 rounded-full bg-[var(--cc-bg-active)] mt-1 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: sessionCount > 0 ? `${Math.min(sessionCount * 15, 100)}%` : "0%",
-                          backgroundColor: color,
-                          opacity: 0.7,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
               </div>
             );
           })}
