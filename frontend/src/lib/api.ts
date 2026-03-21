@@ -150,7 +150,7 @@ export async function rerunAnalysis(runId: string): Promise<unknown> {
 
 // Config validation
 export async function validateConfig(yaml: string): Promise<unknown> {
-  return apiFetch("/api/config/validate", { method: "POST", body: JSON.stringify({ yaml }) });
+  return apiFetch("/api/config/validate", { method: "POST", body: JSON.stringify({ yaml_content: yaml }) });
 }
 
 // Agent memory

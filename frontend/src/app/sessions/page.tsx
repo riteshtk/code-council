@@ -230,7 +230,7 @@ export default function SessionsPage() {
             <tbody>
               {paginated.map((run) => {
                 const rd = repoDisplay(run);
-                const consensus = run.status === "completed" ? Math.round(70 + Math.random() * 25) : 0;
+                const consensus = run.consensus_score || 0;
                 const consensusColor = consensus >= 75 ? "var(--cc-green)" : consensus >= 50 ? "var(--cc-yellow)" : "var(--cc-red)";
 
                 return (

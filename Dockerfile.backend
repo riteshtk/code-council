@@ -5,9 +5,10 @@ WORKDIR /app
 RUN pip install uv
 
 COPY backend/pyproject.toml .
-RUN uv pip install --system -e ".[dev]"
-
 COPY backend/src ./src
+
+RUN uv pip install --system ".[dev]"
+
 COPY backend/alembic.ini .
 
 EXPOSE 8000

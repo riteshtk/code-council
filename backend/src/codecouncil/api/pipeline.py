@@ -86,8 +86,9 @@ async def _persist_event(session_factory, event_dict: dict) -> None:
                 "cached": event_dict.get("metadata", {}).get("cached", False),
             })
             await db.commit()
-    except Exception:
-        pass  # Don't crash pipeline if DB write fails
+    except Exception as exc:
+        import logging
+        logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
 
 async def _update_run_phase(session_factory, run_id: str, status: str, phase: str) -> None:
@@ -97,8 +98,9 @@ async def _update_run_phase(session_factory, run_id: str, status: str, phase: st
             from codecouncil.db.repositories import RunRepository
             await RunRepository(db).update_run_status(uuid.UUID(run_id), status, phase)
             await db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
 
 async def run_real_council(run: dict, runs_store: dict, *, session_factory=None) -> None:
@@ -197,14 +199,18 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
             try:
                 content_text = f.read_text(errors="ignore")
                 loc = len(content_text.splitlines())
-            except Exception:
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
                 loc = 0
             lang = _EXT_LANG.get(f.suffix.lower(), "Other")
             languages[lang] = languages.get(lang, 0) + loc
             total_loc += loc
             try:
                 size = f.stat().st_size
-            except Exception:
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
                 size = 0
             files.append({"path": str(rel), "language": lang, "loc": loc, "size": size})
 
@@ -265,8 +271,9 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
             if p.exists():
                 try:
                     key_file_contents += f"\n--- README ---\n{p.read_text(errors='ignore')[:4000]}\n"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    import logging
+                    logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
                 break
 
         for manifest in [
@@ -277,8 +284,9 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
             if mp.exists():
                 try:
                     key_file_contents += f"\n--- {manifest} ---\n{mp.read_text(errors='ignore')[:3000]}\n"
-                except Exception:
-                    pass
+                except Exception as exc:
+                    import logging
+                    logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
         full_context = context + key_file_contents
 
@@ -435,8 +443,9 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
                             "created_at": datetime.now(timezone.utc),
                         })
                     await _db.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
         # =================================================================
         # PHASE 3: DEBATE — Visionary proposes, Skeptic challenges
@@ -673,8 +682,9 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
                             "updated_at": datetime.now(timezone.utc),
                         })
                     await _db.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
         # =================================================================
         # PHASE 4: VOTING
@@ -784,8 +794,9 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
                     for p in proposals:
                         await pr2.update_proposal_status(uuid.UUID(p["id"]), p["status"])
                     await _db.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
         # =================================================================
         # PHASE 5: SCRIBING — Generate RFC
@@ -959,8 +970,9 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
                         )
                     )
                     await _db.commit()
-            except Exception:
-                pass
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
         # Remove from in-memory cache — it's now fully in DB
         runs_store.pop(run_id, None)
@@ -979,8 +991,9 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
                     from codecouncil.db.repositories import RunRepository as _RR6
                     await _RR6(_db).update_run_status(uuid.UUID(run_id), "failed", "error")
                     await _db.commit()
-            except Exception:
-                pass  # best-effort
+            except Exception as exc:
+                import logging
+                logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
     finally:
         # Cleanup temp dir

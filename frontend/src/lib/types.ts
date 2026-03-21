@@ -154,6 +154,8 @@ export interface RunSummary {
   finding_count: number;
   proposal_count: number;
   total_cost: number;
+  consensus_score?: number;
+  has_rfc?: boolean;
 }
 
 export interface RunDetail extends RunSummary {

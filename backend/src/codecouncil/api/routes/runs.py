@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -22,6 +23,17 @@ from codecouncil.db.repositories import (
 )
 
 router = APIRouter(tags=["runs"])
+
+logger = logging.getLogger("codecouncil.runs")
+
+
+def _handle_task_error(task: asyncio.Task) -> None:
+    """Log any unhandled exceptions from background pipeline tasks."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc:
+        logger.error("Pipeline task failed: %s", exc, exc_info=exc)
 
 # ---------------------------------------------------------------------------
 # In-memory store for **in-progress** runs (pipeline background task mutates
@@ -252,9 +264,8 @@ async def create_run(
 
     # Launch real pipeline as background task
     session_factory = getattr(request.app.state, "db_session_factory", None)
-    asyncio.create_task(
-        run_real_council(run, _runs, session_factory=session_factory)
-    )
+    task = asyncio.create_task(run_real_council(run, _runs, session_factory=session_factory))
+    task.add_done_callback(_handle_task_error)
     return _normalize_run(run)
 
 
@@ -592,7 +603,6 @@ async def rerun(
     _runs[new_run_id] = new_run
 
     session_factory = getattr(request.app.state, "db_session_factory", None)
-    asyncio.create_task(
-        run_real_council(new_run, _runs, session_factory=session_factory)
-    )
+    task = asyncio.create_task(run_real_council(new_run, _runs, session_factory=session_factory))
+    task.add_done_callback(_handle_task_error)
     return _normalize_run(new_run)

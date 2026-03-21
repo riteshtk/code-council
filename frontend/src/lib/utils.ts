@@ -29,8 +29,9 @@ export function getAgentColor(agentId: string): string {
 
 export function formatCost(cost: number | undefined | null): string {
   const c = cost ?? 0;
-  if (c < 0.01) return `$${(c * 100).toFixed(3)}¢`;
-  return `$${c.toFixed(4)}`;
+  if (c === 0) return "$0.00";
+  if (c < 0.01) return `<$0.01`;
+  return `$${c.toFixed(2)}`;
 }
 
 export function formatTokens(tokens: number): string {

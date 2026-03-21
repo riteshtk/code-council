@@ -3,7 +3,8 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
+from sqlalchemy import text
 
 router = APIRouter(tags=["health"])
 
@@ -11,15 +12,22 @@ _START_TIME = time.time()
 
 
 @router.get("/health")
-async def health() -> dict:
-    """Health check — always returns ok if the process is alive."""
+async def health_check(request: Request) -> dict:
+    """Health check — verifies database connectivity."""
+    db_ok = False
+    try:
+        session_factory = getattr(request.app.state, "db_session_factory", None)
+        if session_factory:
+            async with session_factory() as db:
+                await db.execute(text("SELECT 1"))
+                db_ok = True
+    except Exception:
+        db_ok = False
+
     return {
-        "status": "healthy",
-        "providers": {},
-        "agents": {},
-        "database": True,
+        "status": "healthy" if db_ok else "degraded",
+        "database": db_ok,
         "version": "0.1.0",
-        "uptime_seconds": round(time.time() - _START_TIME, 1),
     }
 
 

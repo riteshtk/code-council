@@ -89,10 +89,12 @@ async def _global_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 def add_middleware(app: FastAPI) -> None:
     """Attach all middleware layers to *app*."""
-    # CORS — permissive for development; tighten via env/config in production
+    # CORS — configurable via CORS_ORIGINS env var
+    import os
+    origins = os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

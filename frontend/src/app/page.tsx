@@ -385,9 +385,7 @@ export default function HomePage() {
             ) : (
               runs.map((run) => {
                 const rd = repoDisplay(run);
-                const consensus = run.status === "completed"
-                  ? Math.round((run.finding_count > 0 ? 75 + Math.random() * 20 : 0))
-                  : 0;
+                const consensus = run.consensus_score || 0;
                 const consensusColor = consensus >= 75
                   ? "var(--cc-green)"
                   : consensus >= 50
