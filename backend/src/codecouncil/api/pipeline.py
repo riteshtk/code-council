@@ -425,53 +425,132 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
 
         run["proposals"] = proposals
 
-        # Skeptic challenges
-        challenge_prompt = (
-            f"You are the Skeptic. The Visionary has proposed these changes for "
-            f"{repo_org}/{repo_name}:\n\n{proposal_text}\n\n"
-            "Challenge each proposal. Be direct. Name specific risks, costs, and reasons "
-            "they might fail. Address the Visionary by name. For each proposal, state "
-            "whether you support or oppose it and why. End with your overall assessment."
-        )
-        challenge_response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": challenge_prompt}],
-            max_tokens=1000,
-            temperature=0.2,
-        )
-        challenge_text = challenge_response.choices[0].message.content or ""
-        emit("skeptic", "agent_response", challenge_text, "debate",
-             metadata={"provider": "openai", "model": "gpt-4o"})
+        # Multi-round debate
+        max_rounds = run.get("config_overrides", {}).get("rounds", 3)
+        debate_rounds = []
+        challenge_text = ""
+        evidence_text = ""
+        visionary_response_text = ""
 
-        # Archaeologist weighs in with evidence
-        evidence_prompt = (
-            f"You are the Archaeologist. The council is debating these proposals for "
-            f"{repo_org}/{repo_name}:\n\n"
-            f"Proposals: {proposal_text[:600]}\n"
-            f"Skeptic's challenges: {challenge_text[:600]}\n\n"
-            "Provide historical evidence from the commit history and file patterns. "
-            "Be factual. Reference specific patterns you found. State which proposals "
-            "history supports or warns against."
-        )
-        evidence_response = await client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{"role": "system", "content": evidence_prompt}],
-            max_tokens=800,
-            temperature=0.3,
-        )
-        evidence_text = evidence_response.choices[0].message.content or ""
-        emit("archaeologist", "agent_response", evidence_text, "debate",
-             metadata={"provider": "openai", "model": "gpt-4o"})
+        for round_num in range(1, max_rounds + 1):
+            emit("system", "round_started", f"Round {round_num}/{max_rounds}", "debate",
+                 structured={"round": round_num, "max_rounds": max_rounds})
 
-        run["debate_rounds"] = [{
-            "round": 1,
-            "turns": [
-                {"agent": "visionary", "action": "propose", "content": proposal_text[:200]},
-                {"agent": "skeptic", "action": "challenge", "content": challenge_text[:200]},
-                {"agent": "archaeologist", "action": "evidence", "content": evidence_text[:200]},
-            ],
-        }]
-        emit("system", "phase_completed", "Debate complete", "debate")
+            if round_num == 1:
+                # Round 1: Skeptic challenges proposals
+                challenge_prompt = (
+                    f"You are the Skeptic — clipped, direct, precise. "
+                    f"The Visionary has proposed these changes for {repo_org}/{repo_name}:\n\n"
+                    f"{proposal_text}\n\n"
+                    "Challenge each proposal. Address the Visionary by name. For each proposal:\n"
+                    "1. State your position (support/oppose)\n"
+                    "2. Name specific risks and costs\n"
+                    "3. Suggest conditions under which you'd change your position\n\n"
+                    "Be thorough but concise."
+                )
+            else:
+                # Subsequent rounds: Skeptic responds to Visionary's defense
+                challenge_prompt = (
+                    f"You are the Skeptic. This is round {round_num} of the debate on {repo_org}/{repo_name}.\n\n"
+                    f"Visionary's latest response:\n{visionary_response_text[:800]}\n\n"
+                    f"Archaeologist's evidence:\n{evidence_text[:800]}\n\n"
+                    f"Current proposals:\n" +
+                    "\n".join([f"P-{p['proposal_number']}: {p['title']} (status: {p['status']})" for p in proposals]) +
+                    "\n\nHave your concerns been addressed? Update your positions. "
+                    "If convinced, concede explicitly. If not, explain what's still missing. "
+                    "You may declare DEADLOCK on any proposal where agreement is impossible."
+                )
+
+            challenge_response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": challenge_prompt}],
+                max_tokens=1000,
+                temperature=0.2,
+            )
+            challenge_text = challenge_response.choices[0].message.content or ""
+            emit("skeptic", "agent_speaking", challenge_text, "debate",
+                 metadata={"provider": "openai", "model": "gpt-4o",
+                           "input_tokens": challenge_response.usage.prompt_tokens if challenge_response.usage else 0,
+                           "output_tokens": challenge_response.usage.completion_tokens if challenge_response.usage else 0})
+
+            # Visionary responds to challenges
+            if round_num == 1:
+                visionary_defend_prompt = (
+                    f"You are the Visionary. The Skeptic has challenged your proposals for {repo_org}/{repo_name}:\n\n"
+                    f"Skeptic's challenges:\n{challenge_text}\n\n"
+                    "Respond to each challenge. You may:\n"
+                    "- Defend your proposal with reasoning\n"
+                    "- Revise the proposal to address concerns (mark as [REVISED])\n"
+                    "- Withdraw a proposal if evidence is overwhelming (mark as [WITHDRAWN])\n\n"
+                    "Address the Skeptic by name. Be constructive."
+                )
+            else:
+                visionary_defend_prompt = (
+                    f"You are the Visionary. Round {round_num} of debate on {repo_org}/{repo_name}.\n\n"
+                    f"Skeptic's latest:\n{challenge_text[:800]}\n\n"
+                    f"Archaeologist's evidence:\n{evidence_text[:800]}\n\n"
+                    "Respond. Have the Skeptic's remaining concerns been addressed by your revisions? "
+                    "Final round — make your closing argument for each proposal."
+                )
+
+            visionary_defend = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": visionary_defend_prompt}],
+                max_tokens=1000,
+                temperature=0.5,
+            )
+            visionary_response_text = visionary_defend.choices[0].message.content or ""
+            emit("visionary", "agent_speaking", visionary_response_text, "debate",
+                 metadata={"provider": "openai", "model": "gpt-4o",
+                           "input_tokens": visionary_defend.usage.prompt_tokens if visionary_defend.usage else 0,
+                           "output_tokens": visionary_defend.usage.completion_tokens if visionary_defend.usage else 0})
+
+            # Check for revised/withdrawn proposals
+            for p in proposals:
+                if p["status"] == "proposed":
+                    title_lower = p["title"].lower()
+                    if f"withdraw" in visionary_response_text.lower() and title_lower in visionary_response_text.lower():
+                        p["status"] = "withdrawn"
+                        emit("visionary", "proposal_withdrawn", f"Withdrawn: {p['title']}", "debate")
+                    elif "[REVISED]" in visionary_response_text and title_lower in visionary_response_text.lower():
+                        p["version"] += 1
+                        p["status"] = "revised"
+                        emit("visionary", "proposal_revised", f"Revised (v{p['version']}): {p['title']}", "debate")
+
+            # Archaeologist provides evidence
+            evidence_prompt = (
+                f"You are the Archaeologist. Round {round_num} of debate on {repo_org}/{repo_name}.\n\n"
+                f"Visionary's position:\n{visionary_response_text[:600]}\n"
+                f"Skeptic's challenges:\n{challenge_text[:600]}\n\n"
+                "Provide factual evidence from commit history and file patterns. "
+                "State which side the data supports for each proposal. Be neutral and data-driven."
+            )
+            evidence_response = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "system", "content": evidence_prompt}],
+                max_tokens=800,
+                temperature=0.3,
+            )
+            evidence_text = evidence_response.choices[0].message.content or ""
+            emit("archaeologist", "agent_speaking", evidence_text, "debate",
+                 metadata={"provider": "openai", "model": "gpt-4o",
+                           "input_tokens": evidence_response.usage.prompt_tokens if evidence_response.usage else 0,
+                           "output_tokens": evidence_response.usage.completion_tokens if evidence_response.usage else 0})
+
+            debate_rounds.append({
+                "round": round_num,
+                "turns": [
+                    {"agent": "skeptic", "action": "challenge", "content": challenge_text[:300]},
+                    {"agent": "visionary", "action": "respond", "content": visionary_response_text[:300]},
+                    {"agent": "archaeologist", "action": "evidence", "content": evidence_text[:300]},
+                ],
+            })
+
+            emit("system", "round_ended", f"Round {round_num}/{max_rounds} complete", "debate",
+                 structured={"round": round_num, "max_rounds": max_rounds})
+
+        run["debate_rounds"] = debate_rounds
+        emit("system", "phase_completed", f"Debate complete: {max_rounds} rounds", "debate")
 
         # =================================================================
         # PHASE 4: VOTING

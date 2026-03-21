@@ -143,12 +143,17 @@ export default function DebatePage() {
     return [...provs];
   }, [events]);
 
-  // Round counter
-  const roundCount = useMemo(() => {
-    const debatePhaseEvents = events.filter(
-      (e) => eType(e) === "phase_started" && (e.phase === "debate" || e.phase === "debating")
-    );
-    return debatePhaseEvents.length || 1;
+  // Round counter — track round_started/round_ended events from multi-round debate
+  const { currentRound, maxRounds } = useMemo(() => {
+    const roundEvents = events.filter((e) => eType(e) === "round_started" || eType(e) === "round_ended");
+    if (roundEvents.length === 0) return { currentRound: 1, maxRounds: 3 };
+    const lastRound = roundEvents[roundEvents.length - 1];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const s = (lastRound as any).structured || {};
+    return {
+      currentRound: s.round || 1,
+      maxRounds: s.max_rounds || 3,
+    };
   }, [events]);
 
   const statusPill = STATUS_PILL_STYLES[run?.status || "pending"] || STATUS_PILL_STYLES.pending;
@@ -233,7 +238,7 @@ export default function DebatePage() {
             className="text-[13px] font-semibold"
             style={{ color: "var(--cc-accent)" }}
           >
-            Round {roundCount}/3
+            Round {currentRound}/{maxRounds}
           </span>
         </div>
 
