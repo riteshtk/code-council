@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { getAgentColor } from "@/lib/utils";
 import type { Event, Finding } from "@/lib/types";
 
@@ -128,7 +130,7 @@ export function AgentPanel({ agentId, events, findings, isActive = false, runCom
         </div>
       </div>
 
-      {/* Content preview — compact summary */}
+      {/* Content preview — compact summary, click to expand with full markdown */}
       {contentPreview && (
         <div
           className="text-[11px] leading-[1.5] cursor-pointer rounded px-1.5 py-1 -mx-1.5 hover:bg-white/5 transition-colors"
@@ -136,9 +138,10 @@ export function AgentPanel({ agentId, events, findings, isActive = false, runCom
           onClick={() => setExpanded(!expanded)}
         >
           {expanded ? (
-            <div className="max-h-[200px] overflow-y-auto whitespace-pre-wrap text-[11px]">
-              {lastContent.slice(0, 1000)}
-              {lastContent.length > 1000 && "..."}
+            <div className="max-h-[250px] overflow-y-auto prose-agent-sm">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {lastContent.slice(0, 1500)}
+              </ReactMarkdown>
             </div>
           ) : (
             <>

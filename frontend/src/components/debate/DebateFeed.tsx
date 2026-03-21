@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Event } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
 
@@ -171,12 +173,9 @@ function EventBubble({ event }: { event: Event }) {
             {time}
           </span>
         </div>
-        {/* Event text */}
-        <div
-          className="text-[13px] leading-relaxed"
-          style={{ color: "var(--cc-text)" }}
-        >
-          {content}
+        {/* Event text — rendered as markdown */}
+        <div className="text-[13px] leading-relaxed prose-agent" style={{ color: "var(--cc-text)" }}>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
         </div>
       </div>
     </div>
