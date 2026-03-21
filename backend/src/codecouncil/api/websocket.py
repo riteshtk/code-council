@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid as _uuid
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -22,11 +23,65 @@ async def websocket_debate(websocket: WebSocket, run_id: str) -> None:
     from codecouncil.api.routes.runs import _runs
 
     run = _runs.get(run_id)
+
+    # If the run is not in-memory, try to load completed events from DB
     if not run:
-        await websocket.send_text(json.dumps({"type": "error", "detail": "Run not found"}))
-        await websocket.close(code=4004, reason="Run not found")
-        ws_connections.dec()
-        return
+        try:
+            uid = _uuid.UUID(run_id)
+            session_factory = websocket.app.state.db_session_factory
+            async with session_factory() as db:
+                from codecouncil.db.repositories import EventRepository, RunRepository
+                run_repo = RunRepository(db)
+                db_run = await run_repo.get_run(uid)
+                if not db_run:
+                    await websocket.send_text(json.dumps({"type": "error", "detail": "Run not found"}))
+                    await websocket.close(code=4004, reason="Run not found")
+                    ws_connections.dec()
+                    return
+
+                # Send welcome
+                await websocket.send_text(
+                    json.dumps({"type": "connected", "run_id": run_id})
+                )
+
+                # Stream all persisted events
+                event_repo = EventRepository(db)
+                db_events = await event_repo.get_events_for_run(uid, limit=500)
+                for e in db_events:
+                    event_dict = {
+                        "id": str(e.id),
+                        "event_id": str(e.id),
+                        "run_id": str(e.run_id),
+                        "agent": e.agent,
+                        "agent_id": e.agent,
+                        "type": e.event_type,
+                        "event_type": e.event_type,
+                        "content": e.content,
+                        "phase": e.phase,
+                        "timestamp": e.created_at.isoformat() if e.created_at else "",
+                        "sequence": e.sequence,
+                        "structured": e.structured or {},
+                        "payload": e.structured or {},
+                        "metadata": {
+                            "provider": e.provider or "",
+                            "model": e.model or "",
+                            "input_tokens": e.input_tokens or 0,
+                            "output_tokens": e.output_tokens or 0,
+                            "cost_usd": e.cost_usd or 0,
+                        },
+                    }
+                    await websocket.send_text(json.dumps(event_dict))
+
+                # Completed run — close after sending all events
+                await websocket.close(code=1000, reason="Run completed")
+                ws_connections.dec()
+                return
+        except Exception as exc:
+            logger.exception("WebSocket DB load error for run %s: %s", run_id, exc)
+            await websocket.send_text(json.dumps({"type": "error", "detail": "Run not found"}))
+            await websocket.close(code=4004, reason="Run not found")
+            ws_connections.dec()
+            return
 
     # Send a welcome / connection-acknowledged message
     await websocket.send_text(

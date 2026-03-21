@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -18,6 +19,19 @@ def create_app() -> FastAPI:
         # Startup
         # ------------------------------------------------------------------ #
         logger.info("CodeCouncil API starting up…")
+
+        # Database engine + session factory
+        try:
+            from codecouncil.db.engine import create_engine, create_session_factory
+            engine = create_engine(os.environ.get("DATABASE_URL"))
+            session_factory = create_session_factory(engine)
+            app.state.db_engine = engine
+            app.state.db_session_factory = session_factory
+            logger.info("Database engine initialised.")
+        except Exception as exc:
+            logger.warning("Database not available (%s) — running without persistence.", exc)
+            app.state.db_engine = None
+            app.state.db_session_factory = None
 
         # EventBus
         from codecouncil.events.bus import EventBus
@@ -38,6 +52,9 @@ def create_app() -> FastAPI:
         # Shutdown
         # ------------------------------------------------------------------ #
         logger.info("CodeCouncil API shutting down…")
+        if app.state.db_engine is not None:
+            await app.state.db_engine.dispose()
+            logger.info("Database engine disposed.")
 
     app = FastAPI(
         title="CodeCouncil",
