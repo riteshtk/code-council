@@ -655,9 +655,9 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         # =================================================================
         # PHASE 5: SCRIBING — Generate RFC
         # =================================================================
-        run["phase"] = "output"
-        emit("system", "phase_started", "Scribe generating RFC", "output")
-        emit("scribe", "agent_thinking", "Synthesizing council proceedings into RFC", "output")
+        run["phase"] = "scribing"
+        emit("system", "phase_started", "Scribe generating RFC", "scribing")
+        emit("scribe", "agent_thinking", "Synthesizing council proceedings into RFC", "scribing")
 
         vote_summary = ""
         for proposal in proposals:
@@ -772,19 +772,19 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
 
         run["rfc_content"] = rfc_content
         emit(
-            "scribe", "agent_response", "RFC synthesis complete", "output",
+            "scribe", "agent_response", "RFC synthesis complete", "scribing",
             metadata={
                 "provider": "openai", "model": MODEL_HEAVY,
                 "input_tokens": rfc_response.usage.prompt_tokens if rfc_response.usage else 0,
                 "output_tokens": rfc_response.usage.completion_tokens if rfc_response.usage else 0,
             },
         )
-        emit("system", "phase_completed", "RFC finalized", "output")
+        emit("system", "phase_completed", "RFC finalized", "scribing")
 
         # =================================================================
         # PHASE 6: FINALIZE
         # =================================================================
-        run["phase"] = "output"
+        run["phase"] = "done"
         run["status"] = "completed"
 
         total_cost = 0.0
