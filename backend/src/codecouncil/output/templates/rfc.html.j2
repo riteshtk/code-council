@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RFC: {{ repo_name }}</title>
+  <style>
+    /* ── Base / Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d1117;
+      --surface:     #161b22;
+      --surface2:    #21262d;
+      --border:      #30363d;
+      --text:        #c9d1d9;
+      --text-muted:  #8b949e;
+      --accent:      #58a6ff;
+      --green:       #3fb950;
+      --red:         #f85149;
+      --yellow:      #d29922;
+      --orange:      #db6d28;
+      --purple:      #bc8cff;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+      padding: 2rem;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 960px; margin: 0 auto; }
+    header { border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 2rem; }
+    h1 { font-size: 1.75rem; color: var(--accent); margin-bottom: 0.5rem; }
+    h2 { font-size: 1.2rem; color: var(--accent); border-bottom: 1px solid var(--border);
+         padding-bottom: 0.4rem; margin: 2rem 0 1rem; }
+    h3 { font-size: 1rem; color: var(--text); margin: 1.2rem 0 0.4rem; }
+
+    /* ── Meta table ── */
+    .meta-grid { display: grid; grid-template-columns: auto 1fr; gap: 0.3rem 1rem;
+                 background: var(--surface); border: 1px solid var(--border);
+                 border-radius: 6px; padding: 1rem; margin-top: 1rem; }
+    .meta-label { color: var(--text-muted); font-weight: 600; }
+    .meta-value { color: var(--text); }
+
+    /* ── Generic table ── */
+    table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem; }
+    th { background: var(--surface2); color: var(--text-muted); text-align: left;
+         padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); }
+    td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    /* ── Severity badges ── */
+    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 999px;
+             font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+    .badge-critical { background: #6e1616; color: #f85149; }
+    .badge-high     { background: #5a2e0c; color: #db6d28; }
+    .badge-medium   { background: #5a4b00; color: #d29922; }
+    .badge-low      { background: #1a3a1a; color: #3fb950; }
+    .badge-info     { background: #0c2240; color: #58a6ff; }
+    .badge-passed   { background: #1a3a1a; color: #3fb950; }
+    .badge-rejected { background: #6e1616; color: #f85149; }
+    .badge-deadlocked { background: #3a2a00; color: #d29922; }
+    .badge-pending  { background: #0c2240; color: #58a6ff; }
+    .badge-amended  { background: #2a1a3a; color: #bc8cff; }
+
+    /* ── Vote cells ── */
+    .vote-yes { color: var(--green); font-weight: 700; }
+    .vote-no  { color: var(--red);   font-weight: 700; }
+    .vote-abstain { color: var(--text-muted); }
+
+    /* ── Blockquote dissent ── */
+    blockquote { border-left: 3px solid var(--border); padding-left: 1rem;
+                 color: var(--text-muted); margin: 0.5rem 0; font-style: italic; }
+
+    /* ── Code/inline ── */
+    code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 4px;
+           font-family: "SF Mono", "Fira Code", monospace; font-size: 0.85em; }
+
+    /* ── Print ── */
+    @media print {
+      body { background: #fff; color: #000; }
+      :root { --bg: #fff; --surface: #f5f5f5; --surface2: #eee; --border: #ccc;
+              --text: #000; --text-muted: #555; --accent: #0366d6; }
+      h1, h2 { color: #0366d6; }
+      .badge-critical { background: #ffe0e0; color: #c00; }
+      .badge-passed   { background: #d4edda; color: #155724; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <h1>RFC: {{ repo_name }}</h1>
+    <div class="meta-grid">
+      <span class="meta-label">Repository</span><span class="meta-value"><code>{{ repo_name }}</code></span>
+      <span class="meta-label">Date</span><span class="meta-value">{{ generated_at }}</span>
+      <span class="meta-label">Agents</span><span class="meta-value">{{ agents | join(", ") if agents else "N/A" }}</span>
+      <span class="meta-label">Consensus Score</span><span class="meta-value">{{ "%.0f%%" | format(consensus_score * 100) }}</span>
+      <span class="meta-label">Total Cost</span><span class="meta-value">${{ "%.4f" | format(cost_total) }}</span>
+    </div>
+  </header>
+
+  <!-- Executive Summary -->
+  <section>
+    <h2>Executive Summary</h2>
+    {% if rfc_content %}
+      <p>{{ rfc_content }}</p>
+    {% else %}
+      <p>
+        Analysis identified <strong>{{ findings | length }} finding(s)</strong>
+        ({{ findings | selectattr("severity", "equalto", "CRITICAL") | list | length }} critical) across the codebase.
+        The council reviewed <strong>{{ proposals | length }} proposal(s)</strong>,
+        passing <strong>{{ proposals | selectattr("status", "equalto", "passed") | list | length }}</strong>.
+      </p>
+    {% endif %}
+  </section>
+
+  <!-- Findings -->
+  {% if findings %}
+  <section>
+    <h2>Critical Findings</h2>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Severity</th><th>Agent</th><th>Finding</th><th>Implication</th></tr>
+      </thead>
+      <tbody>
+        {% for f in findings | sort(attribute="severity_order") %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><span class="badge badge-{{ f.severity | lower }}">{{ f.severity }}</span></td>
+          <td>{{ f.agent }}</td>
+          <td>{{ f.content }}</td>
+          <td>{{ f.implication }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <!-- Proposals & Vote Matrix -->
+  {% if proposals %}
+  <section>
+    <h2>Proposals</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Proposal</th>
+          <th>Status</th>
+          {% for agent in all_agents %}<th>{{ agent }}</th>{% endfor %}
+          <th>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in proposals %}
+        <tr>
+          <td>{{ p.proposal_number }}</td>
+          <td><strong>{{ p.title }}</strong><br><small>{{ p.goal }}</small></td>
+          <td><span class="badge badge-{{ p.status | lower }}">{{ p.status | upper }}</span></td>
+          {% for agent in all_agents %}
+            {% set vote = vote_map.get(p.id, {}).get(agent, "-") %}
+            <td class="vote-{{ vote | lower }}">{{ vote }}</td>
+          {% endfor %}
+          <td><span class="badge badge-{{ p.status | lower }}">{{ p.status | upper }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <!-- Dissent -->
+  {% set no_votes = votes | selectattr("vote", "equalto", "NO") | list %}
+  {% if no_votes %}
+  <section>
+    <h2>Dissent</h2>
+    {% for v in no_votes %}
+    <h3>{{ v.agent }} — NO</h3>
+    <blockquote>{{ v.rationale }}</blockquote>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- Deadlocked Items -->
+  {% set deadlocked_proposals = proposals | selectattr("status", "equalto", "deadlocked") | list %}
+  {% if deadlocked_proposals %}
+  <section>
+    <h2>Deadlocked Items</h2>
+    {% for p in deadlocked_proposals %}
+    <h3>{{ p.title }}</h3>
+    {% set p_votes = votes | selectattr("proposal_id", "equalto", p.id) | list %}
+    <table>
+      <thead><tr><th>For</th><th>Against</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>
+            {% for v in p_votes | selectattr("vote", "equalto", "YES") | list %}
+              <strong>{{ v.agent }}</strong>: {{ v.rationale }}<br>
+            {% endfor %}
+          </td>
+          <td>
+            {% for v in p_votes | selectattr("vote", "equalto", "NO") | list %}
+              <strong>{{ v.agent }}</strong>: {{ v.rationale }}<br>
+            {% endfor %}
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- Action Items -->
+  {% if action_items %}
+  <section>
+    <h2>Action Items</h2>
+    <table>
+      <thead><tr><th>#</th><th>Title</th><th>Effort</th><th>Breaking</th></tr></thead>
+      <tbody>
+        {% for item in action_items %}
+        <tr>
+          <td>{{ item.number }}</td>
+          <td>{{ item.title }}</td>
+          <td><code>{{ item.effort }}</code></td>
+          <td>{{ "Yes" if item.breaking_change else "No" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+  <!-- Debate Appendix -->
+  {% if debate_rounds %}
+  <section>
+    <h2>Debate Appendix</h2>
+    {% set ns = namespace(turn_count=0) %}
+    {% for round in debate_rounds %}
+      {% if ns.turn_count < 5 %}
+      <h3>Round {{ round.round }}</h3>
+      {% for turn in round.turns %}
+        {% if ns.turn_count < 5 %}
+        <p><strong>{{ turn.agent }}</strong> <em>({{ turn.action }})</em>: {{ turn.content }}</p>
+        {% set ns.turn_count = ns.turn_count + 1 %}
+        {% endif %}
+      {% endfor %}
+      {% endif %}
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <!-- Cost Summary -->
+  {% if cost_report.agents %}
+  <section>
+    <h2>Cost Summary</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Agent</th><th>Provider</th><th>Model</th>
+          <th>Input Tokens</th><th>Output Tokens</th>
+          <th>Cost (USD)</th><th>Latency (ms)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in cost_report.agents %}
+        <tr>
+          <td>{{ entry.agent }}</td>
+          <td>{{ entry.provider }}</td>
+          <td><code>{{ entry.model }}</code></td>
+          <td>{{ "{:,}".format(entry.input_tokens) }}</td>
+          <td>{{ "{:,}".format(entry.output_tokens) }}</td>
+          <td>${{ "%.4f" | format(entry.cost_usd) }}</td>
+          <td>{{ entry.latency_ms }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="font-weight:700; border-top: 2px solid var(--border)">
+          <td>Total</td><td></td><td></td>
+          <td>{{ "{:,}".format(cost_report.total.input_tokens) }}</td>
+          <td>{{ "{:,}".format(cost_report.total.output_tokens) }}</td>
+          <td>${{ "%.4f" | format(cost_report.total.cost_usd) }}</td>
+          <td>{{ cost_report.total.latency_ms }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+  {% endif %}
+
+</div>
+</body>
+</html>

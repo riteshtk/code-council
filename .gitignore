@@ -24,8 +24,9 @@ out/
 .vscode/
 *.swp
 
-# Output
-output/
+# Output (build artifacts — not source packages)
+/output/
+frontend/output/
 
 # Database
 *.db
