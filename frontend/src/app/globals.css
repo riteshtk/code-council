@@ -53,13 +53,13 @@
    ═══════════════════════════════════════════ */
 
 :root {
-  --cc-bg: #f5f5fa;
-  --cc-bg-elevated: #ffffff;
+  --cc-bg: #f0f0f8;
+  --cc-bg-elevated: #f8f8fc;
   --cc-bg-card: #ffffff;
-  --cc-bg-hover: #ededf5;
-  --cc-bg-active: #e0e0ee;
-  --cc-border: rgba(0, 0, 0, 0.08);
-  --cc-border-hover: rgba(0, 0, 0, 0.15);
+  --cc-bg-hover: #e8e8f2;
+  --cc-bg-active: #dddde8;
+  --cc-border: rgba(0, 0, 0, 0.12);
+  --cc-border-hover: rgba(0, 0, 0, 0.20);
   --cc-border-focus: #6c5ce7;
   --cc-text: #1a1a2e;
   --cc-text-secondary: #555570;

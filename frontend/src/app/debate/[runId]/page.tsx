@@ -223,7 +223,7 @@ export default function DebatePage() {
         className="flex items-center justify-between px-5 py-2.5 border-b shrink-0"
         style={{
           borderColor: "var(--cc-border)",
-          backgroundColor: "var(--cc-bg-card)",
+          backgroundColor: "var(--cc-bg-elevated)",
         }}
       >
         {/* Left: repo + status */}
