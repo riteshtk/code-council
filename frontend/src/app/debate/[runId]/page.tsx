@@ -263,64 +263,48 @@ export default function DebatePage() {
           </span>
         </div>
 
-        {/* Right: elapsed, cost, providers, WS, RFC link */}
-        <div className="flex items-center gap-4">
-          <span
-            className="text-xs font-mono"
-            style={{ color: "var(--cc-text-muted)" }}
-          >
+        {/* Right: elapsed, cost, provider, View RFC */}
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs font-mono text-[var(--cc-text-muted)]">
             {elapsed}
           </span>
           <CostMeter cost={cost} budgetLimit={undefined} />
-          {configOverrides.budget > 0 && (
-            <span className="text-xs text-[var(--cc-text-muted)]">
-              Budget: ${configOverrides.budget}
+          {providers.length > 0 && (
+            <span
+              className="px-2 py-0.5 rounded text-[10px] font-medium border"
+              style={{
+                backgroundColor: "var(--cc-bg)",
+                borderColor: "var(--cc-border)",
+                color: "var(--cc-text-muted)",
+              }}
+            >
+              {providers[0]}
             </span>
           )}
-          <div className="flex gap-1">
-            {providers.map((p) => (
-              <span
-                key={p}
-                className="px-2 py-0.5 rounded text-[10px] border"
-                style={{
-                  backgroundColor: "var(--cc-bg-card)",
-                  borderColor: "var(--cc-border)",
-                  color: "var(--cc-text-muted)",
-                }}
-              >
-                {p}
-              </span>
-            ))}
-          </div>
-          {/* WS status */}
-          <div
-            className="flex items-center gap-1 text-xs"
-            style={{
-              color:
-                wsState === "connected"
-                  ? "var(--cc-green)"
-                  : wsState === "connecting"
-                  ? "var(--cc-yellow)"
+          {/* WS status — only show when actively running */}
+          {run?.status === "running" && (
+            <div
+              className="flex items-center gap-1 text-xs"
+              style={{
+                color: wsState === "connected" ? "var(--cc-green)"
+                  : wsState === "connecting" ? "var(--cc-yellow)"
                   : "var(--cc-text-muted)",
-            }}
-          >
-            {wsState === "connected" ? (
-              <Wifi className="w-3.5 h-3.5" />
-            ) : wsState === "connecting" ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <WifiOff className="w-3.5 h-3.5" />
-            )}
-          </div>
+              }}
+            >
+              {wsState === "connected" ? <Wifi className="w-3.5 h-3.5" />
+                : wsState === "connecting" ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : <WifiOff className="w-3.5 h-3.5" />}
+            </div>
+          )}
           {run?.status === "completed" && (
             <Link
               href={`/rfc/${runId}`}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white transition-all duration-200 hover-lift shrink-0"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold text-white transition-all duration-200 hover-lift shrink-0"
               style={{ backgroundColor: "var(--cc-accent)", boxShadow: "0 2px 10px var(--cc-accent-glow)" }}
             >
               <FileText className="w-4 h-4" />
               View RFC
-              <ExternalLink className="w-3.5 h-3.5" />
+              <ExternalLink className="w-3 h-3" />
             </Link>
           )}
         </div>
