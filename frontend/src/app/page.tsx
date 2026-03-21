@@ -8,30 +8,16 @@ import {
   GitBranch,
   Folder,
   Archive,
-  Play,
   Clock,
   CheckCircle2,
   XCircle,
   Loader2,
-  Activity,
-  Users,
-  DollarSign,
   Trash2,
-  Shield,
-  Eye,
-  Brain,
-  PenTool,
   Zap,
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn, formatCost, timeAgo } from "@/lib/utils";
+import { AGENTS, AGENT_HANDLES } from "@/lib/constants";
 import { createRun, listRuns, deleteRun, health } from "@/lib/api";
 import type { RunSummary, HealthStatus } from "@/lib/types";
 
@@ -69,12 +55,10 @@ const ROUNDS_OPTIONS = [
   { value: "5", label: "5" },
 ];
 
-const AGENT_INFO = [
-  { name: "The Archaeologist", abbr: "AR", role: "Historian \u00b7 Evidence Collector", color: "var(--cc-archaeologist)", icon: Eye },
-  { name: "The Skeptic", abbr: "SK", role: "Risk Analyst \u00b7 Challenger", color: "var(--cc-skeptic)", icon: Shield },
-  { name: "The Visionary", abbr: "VI", role: "Proposer \u00b7 Domain Reader", color: "var(--cc-visionary)", icon: Brain },
-  { name: "The Scribe", abbr: "SC", role: "Secretary \u00b7 RFC Author", color: "var(--cc-scribe)", icon: PenTool },
-];
+const AGENT_INFO = AGENT_HANDLES.map((h) => {
+  const a = AGENTS[h];
+  return { name: a.name, abbr: a.abbr, role: a.role, color: a.color, icon: a.icon };
+});
 
 const STATUS_CONFIG: Record<string, { colorClass: string; bgClass: string; icon: React.ReactNode }> = {
   running: {

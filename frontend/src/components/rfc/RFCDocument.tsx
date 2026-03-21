@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { RunDetail } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
+import { getAgent } from "@/lib/constants";
 import { VoteMatrix } from "./VoteMatrix";
 import { DissentBlock } from "./DissentBlock";
 
@@ -30,19 +31,9 @@ const SEVERITY_LABELS: Record<string, string> = {
   info: "INFO",
 };
 
-const AGENT_DISPLAY_NAMES: Record<string, string> = {
-  archaeologist: "Archaeologist",
-  skeptic: "Skeptic",
-  visionary: "Visionary",
-  scribe: "Scribe",
-};
-
 function getDisplayName(agentId: string): string {
-  const lower = agentId.toLowerCase();
-  for (const [key, val] of Object.entries(AGENT_DISPLAY_NAMES)) {
-    if (lower.includes(key)) return val;
-  }
-  return agentId;
+  const agent = getAgent(agentId);
+  return agent ? agent.shortRole : agentId;
 }
 
 const EFFORT_STYLES: Record<string, { bg: string; color: string }> = {

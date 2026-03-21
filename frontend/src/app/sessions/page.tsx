@@ -7,31 +7,18 @@ import type { RunSummary } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search,
-  Trash2,
-  ExternalLink,
-  FileText,
   Loader2,
   CheckCircle2,
   XCircle,
   Clock,
   BarChart3,
-  Eye,
-  Shield,
-  Brain,
-  PenTool,
-  ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import { cn, formatCost, timeAgo } from "@/lib/utils";
 import { toast } from "sonner";
+import { AGENTS, AGENT_HANDLES } from "@/lib/constants";
 
-/* --- Agent metadata --- */
-const AGENTS = [
-  { handle: "archaeologist", label: "Archaeologist", abbr: "AR", role: "Historian", icon: Eye, color: "#d4a574" },
-  { handle: "skeptic",       label: "Skeptic",       abbr: "SK", role: "Challenger", icon: Shield, color: "#ff6b6b" },
-  { handle: "visionary",     label: "Visionary",     abbr: "VI", role: "Proposer", icon: Brain, color: "#6c5ce7" },
-  { handle: "scribe",        label: "Scribe",        abbr: "SC", role: "Secretary", icon: PenTool, color: "#4ecdc4" },
-];
+const AGENTS_LIST = AGENT_HANDLES.map((h) => AGENTS[h]);
 
 /* --- Status pill --- */
 function StatusPill({ status }: { status: string }) {
@@ -216,7 +203,7 @@ export default function SessionsPage() {
       ) : filtered.length === 0 ? (
         <div className="card-premium py-20 text-center">
           <div className="flex justify-center gap-2 mb-5">
-            {AGENTS.map(({ abbr, color }) => (
+            {AGENTS_LIST.map(({ abbr, color }) => (
               <div
                 key={abbr}
                 className="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold text-white opacity-50"
@@ -286,7 +273,7 @@ export default function SessionsPage() {
                     </td>
                     <td className="py-3.5 px-3.5">
                       <div className="flex">
-                        {AGENTS.map(({ abbr, color }, i) => (
+                        {AGENTS_LIST.map(({ abbr, color }, i) => (
                           <div
                             key={abbr}
                             className="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold text-white border-2 border-[var(--cc-bg)]"
@@ -381,7 +368,7 @@ export default function SessionsPage() {
       <div className="mt-10">
         <h2 className="text-lg font-bold text-[var(--cc-text)] mb-4">Agent Memory</h2>
         <div className="grid grid-cols-4 gap-3">
-          {AGENTS.map(({ handle, label, abbr, role, icon: Icon, color }) => {
+          {AGENTS_LIST.map(({ handle, name: label, abbr, shortRole: role, icon: Icon, color }) => {
             const sessionCount = completedRuns;
             return (
               <div key={handle} className="bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-[10px] p-4">

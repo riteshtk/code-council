@@ -78,6 +78,10 @@ export function GraphVisualizer({
     [events, currentPhase]
   );
 
+  const activeLabel = active
+    ? PIPELINE.find((p) => p.id === active)?.label || active
+    : "Idle";
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-3">
@@ -86,7 +90,7 @@ export function GraphVisualizer({
         </h3>
       </div>
 
-      <div className="flex-1 rounded-xl border border-[var(--cc-border)] bg-[var(--cc-bg-card)] p-4 flex flex-col justify-between gap-0">
+      <div role="progressbar" aria-label={`Pipeline status: ${activeLabel}`} className="flex-1 rounded-xl border border-[var(--cc-border)] bg-[var(--cc-bg-card)] p-4 flex flex-col justify-between gap-0">
         {PIPELINE.map((phase, i) => {
           const isDone = completed.has(phase.id);
           const isActive = active === phase.id;

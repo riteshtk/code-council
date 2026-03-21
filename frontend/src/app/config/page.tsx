@@ -5,7 +5,6 @@ import { useConfigStore } from "@/stores/configStore";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -20,30 +19,20 @@ import {
   Users,
   FolderOpen,
   FileOutput,
-  Save,
   ChevronDown,
   ChevronUp,
   Check,
-  Eye,
-  Shield,
-  Brain,
-  PenTool,
   Zap,
   Globe,
   Server,
   MonitorSpeaker,
+  Brain,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { testProvider } from "@/lib/api";
+import { AGENTS, AGENT_HANDLES } from "@/lib/constants";
 
-/* --- Agent metadata --- */
-const AGENTS_META: Record<string, { label: string; abbr: string; role: string; color: string; icon: React.ComponentType<{ className?: string }> }> = {
-  archaeologist: { label: "The Archaeologist", abbr: "AR", role: "Historian \u00b7 Evidence Collector", color: "#d4a574", icon: Eye },
-  skeptic:       { label: "The Skeptic",       abbr: "SK", role: "Risk Analyst \u00b7 Challenger", color: "#ff6b6b", icon: Shield },
-  visionary:     { label: "The Visionary",     abbr: "VI", role: "Proposer \u00b7 Domain Reader", color: "#6c5ce7", icon: Brain },
-  scribe:        { label: "The Scribe",        abbr: "SC", role: "Secretary \u00b7 RFC Author", color: "#4ecdc4", icon: PenTool },
-};
 
 const PROVIDER_META: Record<string, { icon: React.ComponentType<{ className?: string }>; placeholder: string }> = {
   openai:    { icon: Zap,            placeholder: "sk-..." },
@@ -65,7 +54,10 @@ function AgentCard({ handle, agentCfg, onUpdate }: {
   onUpdate: (patch: Record<string, unknown>) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const meta = AGENTS_META[handle] || { label: handle, abbr: "??", role: handle, color: "var(--cc-accent)", icon: Zap };
+  const agentConst = AGENTS[handle as keyof typeof AGENTS];
+  const meta = agentConst
+    ? { label: agentConst.name, abbr: agentConst.abbr, role: agentConst.role, color: agentConst.color, icon: agentConst.icon }
+    : { label: handle, abbr: "??", role: handle, color: "var(--cc-accent)", icon: Zap };
   const enabled = agentCfg?.enabled !== false;
   const provider = (agentCfg?.provider as string) || "default";
   const model = (agentCfg?.model as string) || "";
@@ -471,7 +463,7 @@ export default function ConfigPage() {
         {/* Agents */}
         <TabsContent value="agents">
           <div className="flex flex-col gap-4">
-            {Object.entries(AGENTS_META).map(([handle]) => {
+            {AGENT_HANDLES.map((handle) => {
               const agentCfg = (agents[handle] ?? {}) as Record<string, unknown>;
               return (
                 <AgentCard

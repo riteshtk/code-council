@@ -4,32 +4,13 @@ import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getAgentColor } from "@/lib/utils";
+import { getAgentName, getAgentAbbr } from "@/lib/constants";
 import type { Event, Finding } from "@/lib/types";
-
-const AGENT_INITIALS: Record<string, string> = {
-  archaeologist: "AR", skeptic: "SK", visionary: "VI", scribe: "SC",
-};
-const AGENT_DISPLAY_NAMES: Record<string, string> = {
-  archaeologist: "The Archaeologist", skeptic: "The Skeptic",
-  visionary: "The Visionary", scribe: "The Scribe",
-};
 
 function matchAgent(agentId: string, eventAgent: string | undefined): boolean {
   if (!eventAgent) return false;
   return agentId.toLowerCase() === eventAgent.toLowerCase()
     || eventAgent.toLowerCase().includes(agentId.toLowerCase());
-}
-
-function getInitials(agentId: string): string {
-  for (const [key, val] of Object.entries(AGENT_INITIALS))
-    if (agentId.toLowerCase().includes(key)) return val;
-  return agentId.slice(0, 2).toUpperCase();
-}
-
-function getDisplayName(agentId: string): string {
-  for (const [key, val] of Object.entries(AGENT_DISPLAY_NAMES))
-    if (agentId.toLowerCase().includes(key)) return val;
-  return agentId;
 }
 
 interface AgentPanelProps {
@@ -42,8 +23,8 @@ interface AgentPanelProps {
 
 export function AgentPanel({ agentId, events, findings, isActive = false, runCompleted = false }: AgentPanelProps) {
   const color = getAgentColor(agentId);
-  const initials = getInitials(agentId);
-  const displayName = getDisplayName(agentId);
+  const initials = getAgentAbbr(agentId);
+  const displayName = getAgentName(agentId);
   const [expanded, setExpanded] = useState(false);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,6 +78,8 @@ export function AgentPanel({ agentId, events, findings, isActive = false, runCom
 
   return (
     <div
+      role="region"
+      aria-label={`${displayName} agent panel`}
       className="border-l-[3px] transition-all duration-300 shrink-0"
       style={{
         borderBottomWidth: 1,

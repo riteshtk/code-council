@@ -29,7 +29,7 @@ export function TopBar() {
         </Link>
 
         {/* Nav */}
-        <nav className="flex items-center gap-1 bg-[var(--cc-bg-elevated)] rounded-xl p-1 border border-[var(--cc-border)]">
+        <nav aria-label="Main navigation" className="flex items-center gap-1 bg-[var(--cc-bg-elevated)] rounded-xl p-1 border border-[var(--cc-border)]">
           {NAV_LINKS.map(({ href, label, icon: Icon }) => {
             const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (

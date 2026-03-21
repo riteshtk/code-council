@@ -1,24 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { TopBar } from "@/components/shared/TopBar";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
+  display: "swap",
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
+  display: "swap",
 });
 
 export const metadata: Metadata = {
   title: "CodeCouncil — AI Code Review Council",
-  description:
-    "Multi-agent AI system for comprehensive code analysis and RFC generation",
+  description: "Multi-agent AI system for comprehensive code analysis and RFC generation",
 };
 
 export default function RootLayout({
@@ -27,17 +29,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
-    >
-      <body
-        className="min-h-full flex flex-col"
-        style={{ backgroundColor: "var(--cc-bg)", color: "var(--cc-text)" }}
-      >
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} dark h-full`}>
+      <body className="min-h-full flex flex-col font-sans antialiased">
         <TooltipProvider>
           <TopBar />
-          <main className="flex-1 flex flex-col">{children}</main>
+          <ErrorBoundary>
+            <main className="flex-1 flex flex-col">{children}</main>
+          </ErrorBoundary>
           <Toaster />
         </TooltipProvider>
       </body>

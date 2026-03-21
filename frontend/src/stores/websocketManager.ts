@@ -51,8 +51,8 @@ export class WebSocketManager {
         } else {
           this.onEvent(data as Event);
         }
-      } catch (e) {
-        console.warn("WS parse error", e);
+      } catch {
+        // silently ignore malformed WS messages
       }
     };
 

@@ -150,6 +150,8 @@ export function ProposalTracker({ proposals }: ProposalTrackerProps) {
 
   return (
     <div
+      role="region"
+      aria-label="Proposal tracker"
       className="border-t"
       style={{
         gridColumn: "1 / -1",

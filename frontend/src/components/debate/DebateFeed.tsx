@@ -5,35 +5,11 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { Event } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
-
-const AGENT_SHORTKEYS: Record<string, string> = {
-  archaeologist: "arch",
-  skeptic: "skep",
-  visionary: "vis",
-  scribe: "scr",
-};
-
-const AGENT_DISPLAY_NAMES: Record<string, string> = {
-  archaeologist: "Archaeologist",
-  skeptic: "Skeptic",
-  visionary: "Visionary",
-  scribe: "Scribe",
-};
+import { getAgent } from "@/lib/constants";
 
 function getAgentDisplayName(agentId: string): string {
-  const lower = agentId.toLowerCase();
-  for (const [key, val] of Object.entries(AGENT_DISPLAY_NAMES)) {
-    if (lower.includes(key)) return val;
-  }
-  return agentId;
-}
-
-function getAgentBarKey(agentId: string): string {
-  const lower = agentId.toLowerCase();
-  for (const [key, val] of Object.entries(AGENT_SHORTKEYS)) {
-    if (lower.includes(key)) return val;
-  }
-  return "system";
+  const agent = getAgent(agentId);
+  return agent ? agent.shortRole : agentId;
 }
 
 // Map event types to mockup badge styles
@@ -239,6 +215,7 @@ export function DebateFeed({ events }: DebateFeedProps) {
         {FILTER_BUTTONS.map((btn) => (
           <button
             key={btn.key}
+            aria-pressed={typeFilter === btn.key}
             onClick={() => setTypeFilter(btn.key)}
             className="px-2.5 py-1 text-[11px] rounded-md border cursor-pointer transition-all duration-200"
             style={{
@@ -253,7 +230,7 @@ export function DebateFeed({ events }: DebateFeedProps) {
       </div>
 
       {/* Events list */}
-      <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1">
+      <div aria-live="polite" aria-label="Debate events" className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1">
         {filtered.length === 0 ? (
           <div
             className="py-8 text-center text-sm"
