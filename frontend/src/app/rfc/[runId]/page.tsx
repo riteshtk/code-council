@@ -1,22 +1,36 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { getRun, getRFC } from "@/lib/api";
 import type { RunDetail } from "@/lib/types";
 import { RFCDocument } from "@/components/rfc/RFCDocument";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, FileText, Code, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 const SECTIONS = [
-  { id: "summary", label: "Summary" },
-  { id: "findings", label: "Findings" },
-  { id: "proposals", label: "Proposals" },
-  { id: "cost", label: "Cost" },
+  { id: "header", label: "Header" },
+  { id: "summary", label: "Executive Summary" },
+  { id: "findings", label: "Critical Findings" },
+  { id: "proposals", label: "Proposals & Votes" },
+  { id: "deadlocked", label: "Deadlocked Items" },
+  { id: "actions", label: "Action Items" },
+  { id: "cost", label: "Cost Summary" },
+  { id: "appendix", label: "Debate Appendix" },
 ];
+
+function downloadFile(content: string, filename: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function RFCPage() {
   const params = useParams<{ runId: string }>();
@@ -27,6 +41,10 @@ export default function RFCPage() {
   const [rfcData, setRfcData] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState("header");
+  const [viewMode, setViewMode] = useState<"document" | "structured">("document");
+
+  const hasMarkdown = Boolean(rfcData?.rfc_content);
 
   useEffect(() => {
     if (!runId) return;
@@ -42,29 +60,57 @@ export default function RFCPage() {
       .finally(() => setLoading(false));
   }, [runId]);
 
-  async function handleExport(format: "json" | "markdown" | "html") {
+  function handleExportMD() {
+    if (!rfcData?.rfc_content) {
+      toast.error("No markdown content available");
+      return;
+    }
+    downloadFile(
+      rfcData.rfc_content as string,
+      `rfc-${runId}.md`,
+      "text/markdown"
+    );
+    toast.success("Exported as MD");
+  }
+
+  function handleExportJSON() {
+    if (!rfcData) {
+      toast.error("No RFC data available");
+      return;
+    }
+    downloadFile(
+      JSON.stringify(rfcData, null, 2),
+      `rfc-${runId}.json`,
+      "application/json"
+    );
+    toast.success("Exported as JSON");
+  }
+
+  async function handleExportHTML() {
     try {
-      const data = await getRFC(runId, format);
+      const data = await getRFC(runId, "html");
       const content =
         typeof data === "string" ? data : JSON.stringify(data, null, 2);
-      const blob = new Blob([content], {
-        type: format === "json" ? "application/json" : "text/plain",
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `rfc-${runId}.${format === "markdown" ? "md" : format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-      toast.success(`Exported as ${format.toUpperCase()}`);
+      downloadFile(content, `rfc-${runId}.html`, "text/html");
+      toast.success("Exported as HTML");
     } catch (e) {
       toast.error(`Export failed: ${e}`);
     }
   }
 
   function scrollToSection(id: string) {
+    setActiveSection(id);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   }
+
+  // Proposal sub-sections for sidebar
+  const proposalLinks = useMemo(() => {
+    if (!run) return [];
+    return run.proposals.map((p) => ({
+      id: `proposal-${p.id}`,
+      label: p.title.length > 25 ? p.title.slice(0, 25) + "..." : p.title,
+    }));
+  }, [run]);
 
   if (loading) {
     return (
@@ -81,99 +127,215 @@ export default function RFCPage() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4">
         <p style={{ color: "var(--cc-red)" }}>{error || "Run not found"}</p>
-        <Button onClick={() => router.back()} variant="outline">
+        <button
+          onClick={() => router.back()}
+          className="px-4 py-2 rounded-lg border text-sm transition-all duration-200"
+          style={{
+            borderColor: "var(--cc-border)",
+            color: "var(--cc-text)",
+            backgroundColor: "var(--cc-bg-card)",
+          }}
+        >
           Go Back
-        </Button>
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex overflow-hidden">
-      {/* Sticky sidebar */}
-      <aside
-        className="w-48 flex-shrink-0 border-r p-4 flex flex-col gap-4"
+    <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: "var(--cc-bg)" }}>
+      {/* TOP BAR */}
+      <div
+        className="flex items-center justify-between px-6 py-3 border-b shrink-0"
         style={{
-          backgroundColor: "var(--cc-bg-card)",
           borderColor: "var(--cc-border)",
+          backgroundColor: "rgba(8,8,13,0.95)",
         }}
       >
-        <button
-          onClick={() => router.push(`/debate/${runId}`)}
-          className="flex items-center gap-2 text-xs hover:opacity-80 transition-opacity"
-          style={{ color: "var(--cc-text-muted)" }}
-        >
-          <ArrowLeft className="w-3 h-3" />
-          Back to Debate
-        </button>
-
-        <div>
-          <div
-            className="text-xs font-medium mb-2 uppercase tracking-wide"
-            style={{ color: "var(--cc-text-muted)" }}
-          >
-            Sections
+        {/* Left: breadcrumb */}
+        <div className="flex items-center gap-4">
+          <div className="text-[13px]" style={{ color: "var(--cc-text-muted)" }}>
+            <Link href="/sessions" className="hover:underline" style={{ color: "var(--cc-text-muted)" }}>
+              Sessions
+            </Link>
+            {" / "}
+            <Link href={`/debate/${runId}`} className="hover:underline" style={{ color: "var(--cc-text-muted)" }}>
+              {run.repo?.url || runId}
+            </Link>
+            {" / "}
+            <span style={{ color: "var(--cc-text)" }}>RFC</span>
           </div>
-          <nav className="space-y-1">
-            {SECTIONS.map((s) => (
+        </div>
+        {/* Right: view toggle + export buttons */}
+        <div className="flex gap-2">
+          {/* View toggle (only show when markdown is available) */}
+          {hasMarkdown && (
+            <div
+              className="flex rounded-md border overflow-hidden"
+              style={{ borderColor: "var(--cc-border)" }}
+            >
               <button
-                key={s.id}
-                onClick={() => scrollToSection(s.id)}
-                className="block w-full text-left text-xs px-2 py-1.5 rounded hover:bg-white/5 transition-colors"
-                style={{ color: "var(--cc-text)" }}
+                onClick={() => setViewMode("document")}
+                className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
+                style={{
+                  backgroundColor: viewMode === "document" ? "var(--cc-accent)" : "var(--cc-bg-card)",
+                  color: viewMode === "document" ? "#fff" : "var(--cc-text-muted)",
+                }}
               >
-                {s.label}
+                Document View
               </button>
-            ))}
-          </nav>
+              <button
+                onClick={() => setViewMode("structured")}
+                className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
+                style={{
+                  backgroundColor: viewMode === "structured" ? "var(--cc-accent)" : "var(--cc-bg-card)",
+                  color: viewMode === "structured" ? "#fff" : "var(--cc-text-muted)",
+                }}
+              >
+                Structured View
+              </button>
+            </div>
+          )}
+          <button
+            onClick={handleExportMD}
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold border cursor-pointer transition-all duration-200"
+            style={{
+              backgroundColor: "var(--cc-bg-card)",
+              borderColor: "var(--cc-border)",
+              color: "var(--cc-text-muted)",
+            }}
+          >
+            Export MD
+          </button>
+          <button
+            onClick={handleExportJSON}
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold border cursor-pointer transition-all duration-200"
+            style={{
+              backgroundColor: "var(--cc-bg-card)",
+              borderColor: "var(--cc-border)",
+              color: "var(--cc-text-muted)",
+            }}
+          >
+            Export JSON
+          </button>
+          <button
+            onClick={handleExportHTML}
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold border cursor-pointer transition-all duration-200"
+            style={{
+              backgroundColor: "var(--cc-bg-card)",
+              borderColor: "var(--cc-border)",
+              color: "var(--cc-text-muted)",
+            }}
+          >
+            Export HTML
+          </button>
+          <button
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold border cursor-pointer transition-all duration-200"
+            style={{
+              backgroundColor: "var(--cc-bg-card)",
+              borderColor: "var(--cc-border)",
+              color: "var(--cc-text-muted)",
+            }}
+          >
+            Share Link
+          </button>
+          <Link
+            href={`/debate/${runId}`}
+            className="px-3.5 py-1.5 rounded-md text-xs font-semibold text-white transition-all duration-200"
+            style={{ backgroundColor: "var(--cc-accent)" }}
+          >
+            Re-analyse
+          </Link>
         </div>
+      </div>
 
-        <div className="mt-auto space-y-2">
+      {/* MAIN LAYOUT: Sidebar + Content */}
+      <div
+        className="flex-1 min-h-0"
+        style={{
+          display: "grid",
+          gridTemplateColumns: viewMode === "document" && hasMarkdown ? "1fr" : "220px 1fr",
+        }}
+      >
+        {/* SIDEBAR (only in structured view or when no markdown) */}
+        {(viewMode === "structured" || !hasMarkdown) && (
+          <aside
+            className="border-r overflow-y-auto sticky top-0"
+            style={{
+              borderColor: "var(--cc-border)",
+              padding: "20px 16px",
+              height: "calc(100vh - 56px - 49px)",
+            }}
+          >
+            <h4
+              className="text-[11px] uppercase tracking-widest mb-3"
+              style={{ color: "var(--cc-text-muted)" }}
+            >
+              Sections
+            </h4>
+            <nav className="space-y-0.5">
+              {SECTIONS.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => scrollToSection(s.id)}
+                  className={`block w-full text-left px-3 py-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200 ${
+                    activeSection === s.id
+                      ? "font-semibold"
+                      : ""
+                  }`}
+                  style={{
+                    backgroundColor: activeSection === s.id
+                      ? "rgba(108,92,231,0.1)"
+                      : "transparent",
+                    color: activeSection === s.id
+                      ? "var(--cc-accent)"
+                      : "var(--cc-text-muted)",
+                    borderLeft: activeSection === s.id
+                      ? "2px solid var(--cc-accent)"
+                      : "2px solid transparent",
+                  }}
+                >
+                  {s.label}
+                </button>
+              ))}
+              {/* Proposal sub-links */}
+              {proposalLinks.map((pl) => (
+                <button
+                  key={pl.id}
+                  onClick={() => scrollToSection(pl.id)}
+                  className="block w-full text-left pl-7 pr-3 py-1.5 rounded-md text-[13px] cursor-pointer transition-all duration-200"
+                  style={{ color: "var(--cc-text-muted)" }}
+                >
+                  {pl.label}
+                </button>
+              ))}
+            </nav>
+          </aside>
+        )}
+
+        {/* CONTENT */}
+        <div className="overflow-y-auto">
           <div
-            className="text-xs font-medium mb-2 uppercase tracking-wide"
-            style={{ color: "var(--cc-text-muted)" }}
+            className="mx-auto"
+            style={{
+              maxWidth: "860px",
+              padding: "40px 48px 80px",
+            }}
           >
-            Export
+            {/* Document View: render markdown RFC */}
+            {viewMode === "document" && hasMarkdown ? (
+              <article className="prose-agent">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {rfcData!.rfc_content as string}
+                </ReactMarkdown>
+              </article>
+            ) : (
+              /* Structured View: cards-based fallback */
+              <RFCDocument run={run} rfcData={rfcData ?? undefined} />
+            )}
           </div>
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full text-xs"
-            onClick={() => handleExport("markdown")}
-            style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
-          >
-            <FileText className="w-3 h-3 mr-1" />
-            Markdown
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full text-xs"
-            onClick={() => handleExport("json")}
-            style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
-          >
-            <Code className="w-3 h-3 mr-1" />
-            JSON
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full text-xs"
-            onClick={() => handleExport("html")}
-            style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
-          >
-            <Download className="w-3 h-3 mr-1" />
-            HTML
-          </Button>
         </div>
-      </aside>
-
-      {/* Main content */}
-      <ScrollArea className="flex-1">
-        <div className="max-w-4xl mx-auto px-8 py-6">
-          <RFCDocument run={run} rfcData={rfcData ?? undefined} />
-        </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

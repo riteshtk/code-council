@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -62,9 +63,28 @@ class PatchConfigRequest(BaseModel):
 
 @router.patch("/config")
 async def patch_config(body: PatchConfigRequest) -> dict:
-    """Apply runtime overrides and return the merged config (not persisted)."""
+    """Apply runtime overrides, persist to global config file, and return merged config."""
     try:
         cfg = load_config(overrides=body.overrides)
+
+        # Persist to global config file so changes survive restarts
+        config_dir = Path.home() / ".codecouncil"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        config_path = config_dir / "config.yaml"
+
+        # Merge with existing config file if present
+        existing: dict[str, Any] = {}
+        if config_path.exists():
+            with open(config_path) as f:
+                loaded = yaml.safe_load(f)
+                if isinstance(loaded, dict):
+                    existing = loaded
+
+        existing.update(body.overrides)
+
+        with open(config_path, "w") as f:
+            yaml.dump(existing, f, default_flow_style=False)
+
         raw = cfg.model_dump()
         return _mask_secrets(raw)
     except Exception as exc:
