@@ -56,7 +56,8 @@ export async function listRuns(params?: {
       .filter(([, v]) => v !== undefined)
       .map(([k, v]) => [k, String(v)])
   ).toString();
-  return apiFetch<RunSummary[]>(`/api/runs${qs ? "?" + qs : ""}`);
+  const data = await apiFetch<{ runs: RunSummary[] } | RunSummary[]>(`/api/runs${qs ? "?" + qs : ""}`);
+  return Array.isArray(data) ? data : (data.runs || []);
 }
 
 export async function deleteRun(runId: string): Promise<void> {
@@ -101,18 +102,20 @@ export async function updateConfig(
 ): Promise<AppConfig> {
   return apiFetch<AppConfig>("/api/config", {
     method: "PATCH",
-    body: JSON.stringify(config),
+    body: JSON.stringify({ overrides: config }),
   });
 }
 
 // Agents
 export async function listAgents(): Promise<AgentIdentity[]> {
-  return apiFetch<AgentIdentity[]>("/api/agents");
+  const data = await apiFetch<{ agents: AgentIdentity[] } | AgentIdentity[]>("/api/agents");
+  return Array.isArray(data) ? data : (data.agents || []);
 }
 
 // Providers
 export async function listProviders(): Promise<string[]> {
-  return apiFetch<string[]>("/api/providers");
+  const data = await apiFetch<{ providers: string[] } | string[]>("/api/providers");
+  return Array.isArray(data) ? data : (data.providers || []);
 }
 
 // Health
