@@ -11,8 +11,6 @@ from codecouncil.api.metrics import ws_connections
 
 logger = logging.getLogger(__name__)
 
-_PING_INTERVAL = 15  # seconds
-
 
 async def websocket_debate(websocket: WebSocket, run_id: str) -> None:
     """Handle a WebSocket connection for live debate events on *run_id*."""
@@ -20,58 +18,53 @@ async def websocket_debate(websocket: WebSocket, run_id: str) -> None:
     ws_connections.inc()
     logger.info("WebSocket connected for run %s", run_id)
 
-    async def _ping_loop():
-        """Send a ping frame every PING_INTERVAL seconds."""
+    # Import runs store lazily to avoid circular imports
+    from codecouncil.api.routes.runs import _runs
+
+    run = _runs.get(run_id)
+    if not run:
+        await websocket.send_text(json.dumps({"type": "error", "detail": "Run not found"}))
+        await websocket.close(code=4004, reason="Run not found")
+        ws_connections.dec()
+        return
+
+    # Send a welcome / connection-acknowledged message
+    await websocket.send_text(
+        json.dumps({"type": "connected", "run_id": run_id})
+    )
+
+    last_seq = 0
+    try:
         while True:
-            await asyncio.sleep(_PING_INTERVAL)
-            try:
-                await websocket.send_text(json.dumps({"type": "ping"}))
-            except Exception:
+            # Re-fetch run in case it was updated
+            run = _runs.get(run_id)
+            if not run:
                 break
 
-    ping_task = asyncio.create_task(_ping_loop())
+            events = run.get("events", [])
+            new_events = [e for e in events if e.get("sequence", 0) > last_seq]
 
-    try:
-        # Send a welcome / connection-acknowledged message
-        await websocket.send_text(
-            json.dumps({"type": "connected", "run_id": run_id})
-        )
+            for event in new_events:
+                await websocket.send_text(json.dumps(event))
+                last_seq = event.get("sequence", last_seq)
 
-        # Main receive loop — handle incoming client messages
-        while True:
-            try:
-                raw = await asyncio.wait_for(websocket.receive_text(), timeout=_PING_INTERVAL + 5)
-            except asyncio.TimeoutError:
-                continue
+            if run.get("status") in ("completed", "failed"):
+                # Give a moment for any final events, then send them and close
+                await asyncio.sleep(0.5)
+                run = _runs.get(run_id)
+                if run:
+                    events = run.get("events", [])
+                    final_new = [e for e in events if e.get("sequence", 0) > last_seq]
+                    for event in final_new:
+                        await websocket.send_text(json.dumps(event))
+                await websocket.close(code=1000, reason="Run completed")
+                break
 
-            try:
-                msg = json.loads(raw)
-            except json.JSONDecodeError:
-                await websocket.send_text(
-                    json.dumps({"type": "error", "detail": "Invalid JSON"})
-                )
-                continue
-
-            msg_type = msg.get("type", "")
-
-            if msg_type == "pong":
-                # Client responding to our ping — do nothing
-                pass
-            elif msg_type == "human_challenge":
-                # Forward to the run's event bus (stubbed here)
-                logger.info("Human challenge received for run %s: %s", run_id, msg)
-                await websocket.send_text(
-                    json.dumps({"type": "ack", "original_type": "human_challenge"})
-                )
-            else:
-                await websocket.send_text(
-                    json.dumps({"type": "error", "detail": f"Unknown message type '{msg_type}'"})
-                )
+            await asyncio.sleep(0.5)
 
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected for run %s", run_id)
     except Exception as exc:
         logger.exception("WebSocket error for run %s: %s", run_id, exc)
     finally:
-        ping_task.cancel()
         ws_connections.dec()

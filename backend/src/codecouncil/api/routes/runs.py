@@ -1,6 +1,7 @@
 """Run management endpoints."""
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from typing import Any
@@ -8,6 +9,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
+
+from codecouncil.api.simulation import simulate_council_run
 
 router = APIRouter(tags=["runs"])
 
@@ -38,6 +41,8 @@ def _normalize_run(run: dict) -> dict:
         "created_at": run.get("created_at", ""),
         "updated_at": run.get("updated_at", ""),
         "config_overrides": run.get("config_overrides", {}),
+        "consensus_score": 100.0 if run.get("status") == "completed" else 0.0,
+        "has_rfc": bool(run.get("rfc_content")),
     }
 
 
@@ -83,8 +88,8 @@ async def create_run(request: CreateRunRequest) -> dict:
         "updated_at": now,
     }
     _runs[run_id] = run
-    # TODO: Launch LangGraph council graph as background task
-    # asyncio.create_task(run_council(run_id, request.repo_url, request.config_overrides))
+    # Launch simulation as background task
+    asyncio.create_task(simulate_council_run(run, _runs))
     return _normalize_run(run)
 
 
@@ -144,16 +149,24 @@ async def get_rfc(run_id: str, format: str = Query(default="markdown")) -> Respo
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
 
+    rfc = run.get("rfc_content", "")
+    if not rfc:
+        rfc = f"# RFC for {run.get('repo_url', 'unknown')}\n\n*Analysis in progress...*\n"
+
     if format == "json":
         import json
         return Response(
-            content=json.dumps(_normalize_run(run), indent=2),
+            content=json.dumps({**_normalize_run(run), "rfc_content": rfc}, indent=2),
             media_type="application/json",
         )
+    if format == "html":
+        html = (
+            f"<html><body style='font-family:sans-serif;max-width:800px;"
+            f"margin:0 auto;padding:20px;'>{rfc}</body></html>"
+        )
+        return Response(content=html, media_type="text/html")
 
-    content = f"# RFC for {run['repo_url']}\n\n*No RFC generated yet.*\n"
-    media_type = "text/markdown" if format == "markdown" else "text/html"
-    return Response(content=content, media_type=media_type)
+    return Response(content=rfc, media_type="text/markdown")
 
 
 @router.get("/runs/{run_id}/events")
@@ -219,4 +232,5 @@ async def rerun(run_id: str) -> dict:
         "rerun_of": run_id,
     }
     _runs[new_run_id] = new_run
+    asyncio.create_task(simulate_council_run(new_run, _runs))
     return _normalize_run(new_run)
