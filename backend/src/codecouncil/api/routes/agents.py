@@ -44,7 +44,18 @@ _memory_store: dict[str, list[dict]] = {a["handle"]: [] for a in _AGENT_METADATA
 @router.get("/agents")
 async def list_agents() -> dict:
     """Return metadata for all registered agents."""
-    return {"agents": _AGENT_METADATA}
+    normalized = [
+        {
+            "id": agent["handle"],
+            "name": agent["name"],
+            "role": agent["debate_role"],
+            "color": agent["color"],
+            "description": agent["description"],
+            "handle": agent["handle"],
+        }
+        for agent in _AGENT_METADATA
+    ]
+    return {"agents": normalized}
 
 
 @router.get("/agents/{handle}/memory")

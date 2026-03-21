@@ -14,7 +14,11 @@ _START_TIME = time.time()
 async def health() -> dict:
     """Health check — always returns ok if the process is alive."""
     return {
-        "status": "ok",
+        "status": "healthy",
+        "providers": {},
+        "agents": {},
+        "database": True,
+        "version": "0.1.0",
         "uptime_seconds": round(time.time() - _START_TIME, 1),
     }
 

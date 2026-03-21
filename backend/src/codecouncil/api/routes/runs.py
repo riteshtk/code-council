@@ -22,7 +22,7 @@ _runs: dict[str, dict] = {}
 
 class CreateRunRequest(BaseModel):
     repo_url: str
-    config_overrides: dict[str, Any] | None = None
+    config_overrides: dict[str, Any] = {}
 
 
 class ReviewRequest(BaseModel):
@@ -52,16 +52,19 @@ async def create_run(request: CreateRunRequest) -> dict:
         "cost_usd": 0.0,
     }
     _runs[run_id] = run
-    return {"run_id": run_id, "status": "pending"}
+    return {"id": run_id, "status": "pending"}
 
 
 @router.get("/runs")
 async def list_runs(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    status: str | None = Query(default=None),
 ) -> dict:
     """List all runs."""
     all_runs = list(_runs.values())
+    if status:
+        all_runs = [r for r in all_runs if r.get("status") == status]
     paginated = all_runs[offset: offset + limit]
     return {
         "runs": paginated,
@@ -77,17 +80,31 @@ async def get_run(run_id: str) -> dict:
     run = _runs.get(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    return run
+    return {
+        "id": run_id,
+        "status": run["status"],
+        "phase": run.get("phase"),
+        "repo": {"url": run.get("repo_url", ""), "local_path": ""},
+        "findings": run.get("findings", []),
+        "proposals": run.get("proposals", []),
+        "votes": run.get("votes", []),
+        "events": run.get("events", []),
+        "total_cost": run.get("cost_usd", 0),
+        "finding_count": len(run.get("findings", [])),
+        "proposal_count": len(run.get("proposals", [])),
+        "created_at": run.get("created_at", ""),
+        "updated_at": run.get("updated_at", ""),
+    }
 
 
 @router.delete("/runs/{run_id}")
 async def cancel_run(run_id: str) -> dict:
-    """Cancel an in-progress run."""
+    """Delete/cancel a run."""
     run = _runs.get(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    run["status"] = "cancelled"
-    return {"run_id": run_id, "status": "cancelled"}
+    del _runs[run_id]
+    return {"id": run_id, "status": "deleted"}
 
 
 @router.post("/runs/{run_id}/review")
@@ -139,8 +156,13 @@ async def get_cost(run_id: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
     return {
         "run_id": run_id,
-        "total_usd": run.get("cost_usd", 0.0),
-        "breakdown": [],
+        "total_cost": run.get("cost_usd", 0),
+        "total_tokens": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "by_agent": {},
+        "by_phase": {},
+        "currency": "USD",
     }
 
 
