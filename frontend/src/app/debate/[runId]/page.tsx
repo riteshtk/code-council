@@ -44,6 +44,8 @@ export default function DebatePage() {
   const {
     run,
     setRun,
+    clearRun,
+    addEvent,
     phase,
     events,
     findings,
@@ -56,11 +58,23 @@ export default function DebatePage() {
 
   useEffect(() => {
     if (!runId) return;
+    // Clear ALL previous run state before loading new one
+    clearRun();
     setLoading(true);
+    setError(null);
     getRun(runId)
       .then((r) => {
         setRun(r);
-        connectWebSocket(runId);
+        // Replay existing events into the store — this populates findings, proposals, votes
+        if (r.events && Array.isArray(r.events)) {
+          for (const event of r.events) {
+            addEvent(event);
+          }
+        }
+        // Connect WebSocket for live updates (only if run is still in progress)
+        if (r.status !== "completed" && r.status !== "failed") {
+          connectWebSocket(runId);
+        }
       })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));

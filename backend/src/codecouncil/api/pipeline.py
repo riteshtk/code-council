@@ -13,14 +13,23 @@ from pathlib import Path
 from openai import AsyncOpenAI
 
 # ── Model configuration ──
-# Heavy thinking tasks (analysis, debate, RFC) use the best model
-# Light tasks (voting) use a fast model to save cost
-MODEL_HEAVY = "gpt-4o"       # Best reasoning: analysis, debate, RFC
-MODEL_LIGHT = "gpt-4o-mini"  # Fast + cheap: voting, short responses
-MAX_TOKENS_ANALYSIS = 4096   # Agent analysis — needs room for detailed findings
-MAX_TOKENS_DEBATE = 3000     # Debate responses — thorough argumentation
-MAX_TOKENS_VOTE = 300        # Vote — short, structured
-MAX_TOKENS_RFC = 8192        # RFC — comprehensive institutional document
+# ── Model configuration ──
+# GPT-5.4 = most capable, 128k context, best reasoning
+# GPT-4.1-mini = fast + cheap for simple structured tasks
+MODEL_HEAVY = "gpt-5.4"         # Best: analysis, debate, RFC generation
+MODEL_LIGHT = "gpt-4.1-mini"    # Fast: voting, short structured responses
+MAX_TOKENS_ANALYSIS = 8192      # Agent analysis — detailed findings
+MAX_TOKENS_DEBATE = 4096        # Debate — thorough argumentation
+MAX_TOKENS_VOTE = 500           # Vote — structured response
+MAX_TOKENS_RFC = 16384          # RFC — comprehensive institutional document
+
+# GPT-5.x uses max_completion_tokens, GPT-4.x uses max_tokens
+# We handle both via a helper
+def _model_kwargs(model: str, max_tokens: int) -> dict:
+    """Return the right token-limit kwarg for the model family."""
+    if model.startswith("gpt-5"):
+        return {"max_completion_tokens": max_tokens}
+    return {"max_tokens": max_tokens}
 
 
 def _load_api_key() -> str:
@@ -281,7 +290,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 response = await client.chat.completions.create(
                     model=MODEL_HEAVY,
                     messages=[{"role": "system", "content": prompt}],
-                    max_tokens=MAX_TOKENS_ANALYSIS,
+                    **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_ANALYSIS),
                     temperature=_temperatures.get(agent_name, 0.3),
                 )
                 text = response.choices[0].message.content or ""
@@ -376,7 +385,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         proposal_response = await client.chat.completions.create(
             model=MODEL_HEAVY,
             messages=[{"role": "system", "content": proposal_prompt}],
-            max_tokens=MAX_TOKENS_DEBATE,
+            **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
             temperature=0.6,
         )
         proposal_text = proposal_response.choices[0].message.content or ""
@@ -474,7 +483,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             challenge_response = await client.chat.completions.create(
                 model=MODEL_HEAVY,
                 messages=[{"role": "system", "content": challenge_prompt}],
-                max_tokens=MAX_TOKENS_DEBATE,
+                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
                 temperature=0.2,
             )
             challenge_text = challenge_response.choices[0].message.content or ""
@@ -506,7 +515,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             visionary_defend = await client.chat.completions.create(
                 model=MODEL_HEAVY,
                 messages=[{"role": "system", "content": visionary_defend_prompt}],
-                max_tokens=MAX_TOKENS_DEBATE,
+                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
                 temperature=0.5,
             )
             visionary_response_text = visionary_defend.choices[0].message.content or ""
@@ -538,7 +547,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             evidence_response = await client.chat.completions.create(
                 model=MODEL_HEAVY,
                 messages=[{"role": "system", "content": evidence_prompt}],
-                max_tokens=MAX_TOKENS_DEBATE,
+                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
                 temperature=0.3,
             )
             evidence_text = evidence_response.choices[0].message.content or ""
@@ -588,7 +597,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                             "role": "system",
                             "content": f"You are the {agent.capitalize()} agent. {vote_prompt}",
                         }],
-                        max_tokens=MAX_TOKENS_VOTE,
+                        **_model_kwargs(MODEL_LIGHT, MAX_TOKENS_VOTE),
                         temperature=0.2,
                     )
                     vote_text = vote_response.choices[0].message.content or ""
@@ -756,7 +765,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         rfc_response = await client.chat.completions.create(
             model=MODEL_HEAVY,
             messages=[{"role": "system", "content": rfc_prompt}],
-            max_tokens=MAX_TOKENS_RFC,
+            **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_RFC),
             temperature=0.1,
         )
         rfc_content = rfc_response.choices[0].message.content or ""
