@@ -13,8 +13,8 @@ import {
   XCircle,
   Loader2,
   Trash2,
-  Zap,
 } from "lucide-react";
+import { Logo } from "@/components/shared/Logo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatCost, timeAgo } from "@/lib/utils";
 import { AGENTS, AGENT_HANDLES } from "@/lib/constants";
@@ -465,7 +465,7 @@ export default function HomePage() {
                     </div>
                   ))}
                 </div>
-                <Zap className="w-8 h-8 mx-auto mb-3 text-[var(--cc-accent)] opacity-60" />
+                <Logo size={40} className="mx-auto mb-3 opacity-60" />
                 <p className="text-lg font-semibold text-[var(--cc-text)] mb-1">Your first council session awaits</p>
                 <p className="text-sm text-[var(--cc-text-muted)]">Enter a GitHub repository URL above and click Analyse to begin.</p>
               </div>

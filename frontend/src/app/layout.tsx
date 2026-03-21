@@ -21,6 +21,13 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "CodeCouncil — AI Code Review Council",
   description: "Multi-agent AI system for comprehensive code analysis and RFC generation",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon.svg", type: "image/svg+xml", sizes: "512x512" },
+    ],
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

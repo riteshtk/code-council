@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { Home, Settings, History, Zap } from "lucide-react";
+import { Home, Settings, History } from "lucide-react";
+import { Logo } from "./Logo";
 
 const NAV_LINKS = [
   { href: "/", label: "Home", icon: Home },
@@ -19,9 +20,7 @@ export function TopBar() {
       <div className="flex items-center justify-between px-6 h-14 max-w-7xl mx-auto w-full">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--cc-accent)] shadow-[0_2px_10px_rgba(108,92,231,0.4)] group-hover:shadow-[0_4px_20px_rgba(108,92,231,0.55)] transition-all duration-300">
-            <Zap className="w-4 h-4 text-white" />
-          </div>
+          <Logo size={32} className="rounded-lg shadow-[0_2px_10px_rgba(108,92,231,0.4)] group-hover:shadow-[0_4px_20px_rgba(108,92,231,0.55)] transition-all duration-300" />
           <span className="font-bold text-lg tracking-tight">
             <span className="text-[var(--cc-text)]">Code</span>
             <span className="text-[var(--cc-accent)]">Council</span>
