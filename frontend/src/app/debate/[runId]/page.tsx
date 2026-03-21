@@ -218,96 +218,116 @@ export default function DebatePage() {
         height: "calc(100vh - 56px)",
       }}
     >
-      {/* ═══════ TOP BAR ═══════ */}
+      {/* ═══════ TOP BAR — single row matching mockup ═══════ */}
       <div
-        className="flex items-center justify-between px-5 py-2.5 border-b shrink-0"
+        className="flex items-center gap-4 px-4 py-2 border-b shrink-0 overflow-x-auto"
         style={{
           borderColor: "var(--cc-border)",
-          backgroundColor: "var(--cc-bg-elevated)",
+          backgroundColor: "var(--cc-bg-card)",
         }}
       >
-        {/* Left: repo + status */}
-        <div className="flex items-center gap-4">
-          <div className="text-sm" style={{ color: "var(--cc-text-muted)" }}>
-            <span className="font-semibold" style={{ color: "var(--cc-text)" }}>
-              {run?.repo?.url || run?.repo?.local_path || runId}
-            </span>
-          </div>
-          <span
-            className={`px-3 py-1 rounded-xl text-[11px] font-semibold uppercase tracking-wide ${
-              run?.status === "running" ? "animate-pulse-glow" : ""
-            }`}
-            style={{ backgroundColor: statusPill.bg, color: statusPill.color }}
-          >
-            {statusPill.label}
-          </span>
+        {/* Repo name */}
+        <span className="text-sm font-semibold text-[var(--cc-text)] whitespace-nowrap shrink-0">
+          {(() => {
+            const url = run?.repo?.url || run?.repo?.local_path || "";
+            const match = url.match(/github\.com\/([^/]+\/[^/]+)/);
+            return match ? match[1] : url || runId;
+          })()}
+        </span>
+
+        {/* Status pill */}
+        <span
+          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide shrink-0 ${
+            run?.status === "running" ? "animate-pulse-glow" : ""
+          }`}
+          style={{ backgroundColor: statusPill.bg, color: statusPill.color }}
+        >
+          {statusPill.label}
+        </span>
+
+        {/* Phase dots */}
+        <div className="flex items-center gap-1 shrink-0">
+          {["ingestion","analysis","debate","synthesis","review","output"].map((p) => {
+            const isDone = completedPhases.includes(p as any);
+            const isActive = phase === p;
+            return (
+              <div
+                key={p}
+                className="w-2 h-2 rounded-full transition-all duration-300"
+                style={{
+                  backgroundColor: isDone ? "var(--cc-green)" : isActive ? "var(--cc-accent)" : "var(--cc-border)",
+                  boxShadow: isActive ? "0 0 6px var(--cc-accent-glow)" : "none",
+                }}
+              />
+            );
+          })}
         </div>
 
-        {/* Center: phase indicator + topology + round */}
-        <div className="flex items-center gap-5">
-          <PhaseIndicator
-            currentPhase={phase}
-            completedPhases={completedPhases}
-          />
-          <span
-            className="text-[13px] font-semibold capitalize"
-            style={{ color: "var(--cc-text-muted)" }}
-          >
-            {topologyLabel}
-          </span>
-          <span
-            className="text-[13px] font-semibold"
-            style={{ color: "var(--cc-accent)" }}
-          >
-            Round {currentRound}/{maxRounds}
-          </span>
+        {/* Phase labels with arrows */}
+        <div className="flex items-center gap-0 text-[11px] shrink-0 whitespace-nowrap">
+          {[
+            { key: "ingestion", label: "INGESTION" },
+            { key: "analysis", label: "ANALYSIS" },
+            { key: "debate", label: "DEBATE" },
+            { key: "synthesis", label: "VOTING" },
+            { key: "review", label: "SCRIBING" },
+            { key: "output", label: "DONE" },
+          ].map((p, i) => {
+            const isDone = completedPhases.includes(p.key as any);
+            const isActive = phase === p.key;
+            return (
+              <span key={p.key} className="flex items-center">
+                {i > 0 && <span className="mx-1 text-[var(--cc-text-muted)] opacity-40">→</span>}
+                <span
+                  className={isActive ? "font-bold" : ""}
+                  style={{
+                    color: isDone ? "var(--cc-text-muted)" : isActive ? "var(--cc-text)" : "var(--cc-text-muted)",
+                    opacity: isDone ? 0.5 : isActive ? 1 : 0.4,
+                  }}
+                >
+                  {p.label}
+                </span>
+              </span>
+            );
+          })}
         </div>
 
-        {/* Right: elapsed, cost, provider, View RFC */}
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-xs font-mono text-[var(--cc-text-muted)]">
-            {elapsed}
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Round counter */}
+        <span className="text-[13px] font-bold text-[var(--cc-accent)] shrink-0 whitespace-nowrap">
+          Round {currentRound}/{maxRounds}
+        </span>
+
+        {/* Elapsed */}
+        <span className="text-xs font-mono text-[var(--cc-text-muted)] shrink-0">
+          {elapsed}
+        </span>
+
+        {/* Cost */}
+        <CostMeter cost={cost} budgetLimit={undefined} />
+
+        {/* Provider badge */}
+        {providers.length > 0 && (
+          <span className="px-2 py-0.5 rounded text-[10px] font-medium border shrink-0"
+            style={{ backgroundColor: "var(--cc-bg)", borderColor: "var(--cc-border)", color: "var(--cc-text-muted)" }}>
+            {providers[0]}
           </span>
-          <CostMeter cost={cost} budgetLimit={undefined} />
-          {providers.length > 0 && (
-            <span
-              className="px-2 py-0.5 rounded text-[10px] font-medium border"
-              style={{
-                backgroundColor: "var(--cc-bg)",
-                borderColor: "var(--cc-border)",
-                color: "var(--cc-text-muted)",
-              }}
-            >
-              {providers[0]}
-            </span>
-          )}
-          {/* WS status — only show when actively running */}
-          {run?.status === "running" && (
-            <div
-              className="flex items-center gap-1 text-xs"
-              style={{
-                color: wsState === "connected" ? "var(--cc-green)"
-                  : wsState === "connecting" ? "var(--cc-yellow)"
-                  : "var(--cc-text-muted)",
-              }}
-            >
-              {wsState === "connected" ? <Wifi className="w-3.5 h-3.5" />
-                : wsState === "connecting" ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                : <WifiOff className="w-3.5 h-3.5" />}
-            </div>
-          )}
-          {run?.status === "completed" && (
-            <Link
-              href={`/rfc/${runId}`}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-bold text-white transition-all duration-200 hover-lift shrink-0"
-              style={{ backgroundColor: "var(--cc-accent)", boxShadow: "0 2px 10px var(--cc-accent-glow)" }}
-            >
-              <FileText className="w-4 h-4" />
-              View RFC
-              <ExternalLink className="w-3 h-3" />
-            </Link>
-          )}
-        </div>
+        )}
+
+        {/* View RFC — shown when completed */}
+        {run?.status === "completed" && (
+          <Link
+            href={`/rfc/${runId}`}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-bold text-white shrink-0 transition-all duration-200 hover-lift"
+            style={{ backgroundColor: "var(--cc-accent)", boxShadow: "0 2px 8px var(--cc-accent-glow)" }}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            View RFC
+            <ExternalLink className="w-3 h-3" />
+          </Link>
+        )}
       </div>
 
       {/* ═══════ COMPLETION SUMMARY ═══════ */}
