@@ -322,7 +322,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                         "agent": agent_name,
                         "agent_id": agent_name,
                         "severity": severity,
-                        "title": parts[0].strip()[:120],
+                        "title": parts[0].strip()[:200],
                         "content": parts[0].strip(),
                         "description": parts[0].strip(),
                         "implication": parts[1].strip() if len(parts) > 1 else "",
@@ -334,7 +334,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                     findings.append(finding)
                     emit(
                         agent_name, "finding_emitted",
-                        f"[{severity.upper()}] {parts[0].strip()[:100]}",
+                        f"[{severity.upper()}] {parts[0].strip()}",
                         "analysing", structured=finding,
                     )
 
