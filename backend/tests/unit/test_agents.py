@@ -4,6 +4,7 @@ import pytest
 from uuid import uuid4
 
 from codecouncil.agents.base import BaseAgent, DebateContext, AgentResponse
+from codecouncil.agents.definition import AgentDefinition
 from codecouncil.agents.registry import AgentRegistry
 from codecouncil.agents.archaeologist import Archaeologist
 from codecouncil.agents.skeptic import Skeptic
@@ -39,17 +40,26 @@ class MockProvider(ProviderPlugin):
         return 4096
 
 
+def _make_defn(handle, debate_role="analyst", can_vote=True):
+    """Helper to create a minimal AgentDefinition for testing."""
+    return AgentDefinition(
+        handle=handle, name=handle.capitalize(), abbr=handle[:3].upper(),
+        role="test", short_role="test", color="#000", icon="test",
+        debate_role=debate_role, can_vote=can_vote,
+    )
+
+
 def test_registry_register_and_get():
     registry = AgentRegistry()
-    agent = Archaeologist()
-    registry.register("archaeologist", agent)
-    assert registry.get("archaeologist") is agent
+    defn = _make_defn("archaeologist")
+    registry.register(defn)
+    assert registry.get("archaeologist") is defn
 
 
 def test_registry_list_all():
     registry = AgentRegistry()
-    registry.register("archaeologist", Archaeologist())
-    registry.register("skeptic", Skeptic())
+    registry.register(_make_defn("archaeologist"))
+    registry.register(_make_defn("skeptic"))
     assert len(registry.list_all()) == 2
 
 
@@ -109,24 +119,24 @@ def test_parse_vote_no():
 
 def test_voting_agents_exclude_scribe():
     registry = AgentRegistry()
-    registry.register("archaeologist", Archaeologist())
-    registry.register("skeptic", Skeptic())
-    registry.register("visionary", Visionary())
-    registry.register("scribe", Scribe())
-    voting = registry.get_voting_agents()
-    handles = [a.identity.handle for a in voting]
+    registry.register(_make_defn("archaeologist", "analyst", can_vote=True))
+    registry.register(_make_defn("skeptic", "challenger", can_vote=True))
+    registry.register(_make_defn("visionary", "proposer", can_vote=True))
+    registry.register(_make_defn("scribe", "scribe", can_vote=False))
+    voting = registry.list_voting()
+    handles = [a.handle for a in voting]
     assert "scribe" not in handles
     assert len(handles) == 3
 
 
 def test_analyst_agents_exclude_scribe():
     registry = AgentRegistry()
-    registry.register("archaeologist", Archaeologist())
-    registry.register("skeptic", Skeptic())
-    registry.register("visionary", Visionary())
-    registry.register("scribe", Scribe())
-    analysts = registry.get_analyst_agents()
-    handles = [a.identity.handle for a in analysts]
+    registry.register(_make_defn("archaeologist", "analyst"))
+    registry.register(_make_defn("skeptic", "challenger"))
+    registry.register(_make_defn("visionary", "proposer"))
+    registry.register(_make_defn("scribe", "scribe"))
+    analysts = registry.list_analysts()
+    handles = [a.handle for a in analysts]
     assert "scribe" not in handles
 
 
