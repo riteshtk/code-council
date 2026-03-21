@@ -132,10 +132,10 @@ export interface RepoContext {
 export interface RunSummary {
   id: string;
   status: "pending" | "running" | "completed" | "failed";
-  phase?: Phase;
-  repo: RepoContext;
-  created_at: string;
-  updated_at: string;
+  phase?: Phase | string;
+  repo?: { url?: string; local_path?: string } | null;
+  created_at?: string;
+  updated_at?: string;
   completed_at?: string;
   finding_count: number;
   proposal_count: number;

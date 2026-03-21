@@ -96,7 +96,7 @@ export const useRunStore = create<RunState>((set, get) => ({
     set({
       run,
       runId: run.id,
-      phase: run.phase || null,
+      phase: (run.phase as Phase) || null,
     }),
 
   clearRun: () => {

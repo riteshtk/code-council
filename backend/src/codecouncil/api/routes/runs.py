@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -14,6 +15,30 @@ router = APIRouter(tags=["runs"])
 # In-memory store for runs (DB integration deferred; no DB required in tests)
 # ---------------------------------------------------------------------------
 _runs: dict[str, dict] = {}
+
+
+def _normalize_run(run: dict) -> dict:
+    """Normalize a stored run dict into the shape the frontend expects."""
+    run_id = run.get("run_id", run.get("id", ""))
+    return {
+        "id": run_id,
+        "status": run.get("status", "pending"),
+        "phase": run.get("phase", "init"),
+        "repo": {
+            "url": run.get("repo_url", ""),
+            "local_path": run.get("local_path", ""),
+        },
+        "findings": run.get("findings", []),
+        "proposals": run.get("proposals", []),
+        "votes": run.get("votes", []),
+        "events": run.get("events", []),
+        "total_cost": run.get("cost_usd", 0) or 0,
+        "finding_count": len(run.get("findings", [])),
+        "proposal_count": len(run.get("proposals", [])),
+        "created_at": run.get("created_at", ""),
+        "updated_at": run.get("updated_at", ""),
+        "config_overrides": run.get("config_overrides", {}),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +67,7 @@ class ReviewRequest(BaseModel):
 async def create_run(request: CreateRunRequest) -> dict:
     """Start a new council run."""
     run_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
     run = {
         "run_id": run_id,
         "repo_url": request.repo_url,
@@ -49,10 +75,17 @@ async def create_run(request: CreateRunRequest) -> dict:
         "status": "pending",
         "phase": "init",
         "events": [],
+        "findings": [],
+        "proposals": [],
+        "votes": [],
         "cost_usd": 0.0,
+        "created_at": now,
+        "updated_at": now,
     }
     _runs[run_id] = run
-    return {"id": run_id, "status": "pending"}
+    # TODO: Launch LangGraph council graph as background task
+    # asyncio.create_task(run_council(run_id, request.repo_url, request.config_overrides))
+    return _normalize_run(run)
 
 
 @router.get("/runs")
@@ -65,9 +98,11 @@ async def list_runs(
     all_runs = list(_runs.values())
     if status:
         all_runs = [r for r in all_runs if r.get("status") == status]
+    # Sort newest first
+    all_runs.sort(key=lambda r: r.get("created_at", ""), reverse=True)
     paginated = all_runs[offset: offset + limit]
     return {
-        "runs": paginated,
+        "runs": [_normalize_run(r) for r in paginated],
         "total": len(all_runs),
         "limit": limit,
         "offset": offset,
@@ -80,21 +115,7 @@ async def get_run(run_id: str) -> dict:
     run = _runs.get(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    return {
-        "id": run_id,
-        "status": run["status"],
-        "phase": run.get("phase"),
-        "repo": {"url": run.get("repo_url", ""), "local_path": ""},
-        "findings": run.get("findings", []),
-        "proposals": run.get("proposals", []),
-        "votes": run.get("votes", []),
-        "events": run.get("events", []),
-        "total_cost": run.get("cost_usd", 0),
-        "finding_count": len(run.get("findings", [])),
-        "proposal_count": len(run.get("proposals", [])),
-        "created_at": run.get("created_at", ""),
-        "updated_at": run.get("updated_at", ""),
-    }
+    return _normalize_run(run)
 
 
 @router.delete("/runs/{run_id}")
@@ -113,7 +134,7 @@ async def submit_review(run_id: str, review: ReviewRequest) -> dict:
     run = _runs.get(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
-    return {"run_id": run_id, "review_type": review.type, "accepted": True}
+    return {"id": run_id, "review_type": review.type, "accepted": True}
 
 
 @router.get("/runs/{run_id}/rfc")
@@ -122,8 +143,16 @@ async def get_rfc(run_id: str, format: str = Query(default="markdown")) -> Respo
     run = _runs.get(run_id)
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
+
+    if format == "json":
+        import json
+        return Response(
+            content=json.dumps(_normalize_run(run), indent=2),
+            media_type="application/json",
+        )
+
     content = f"# RFC for {run['repo_url']}\n\n*No RFC generated yet.*\n"
-    media_type = "text/markdown" if format == "markdown" else "application/json"
+    media_type = "text/markdown" if format == "markdown" else "text/html"
     return Response(content=content, media_type=media_type)
 
 
@@ -156,7 +185,7 @@ async def get_cost(run_id: str) -> dict:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
     return {
         "run_id": run_id,
-        "total_cost": run.get("cost_usd", 0),
+        "total_cost": run.get("cost_usd", 0) or 0,
         "total_tokens": 0,
         "prompt_tokens": 0,
         "completion_tokens": 0,
@@ -173,15 +202,21 @@ async def rerun(run_id: str) -> dict:
     if run is None:
         raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
     new_run_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
     new_run = {
         "run_id": new_run_id,
         "repo_url": run["repo_url"],
-        "config_overrides": run["config_overrides"],
+        "config_overrides": run.get("config_overrides", {}),
         "status": "pending",
         "phase": "init",
         "events": [],
+        "findings": [],
+        "proposals": [],
+        "votes": [],
         "cost_usd": 0.0,
+        "created_at": now,
+        "updated_at": now,
         "rerun_of": run_id,
     }
     _runs[new_run_id] = new_run
-    return {"run_id": new_run_id, "status": "pending", "rerun_of": run_id}
+    return _normalize_run(new_run)
