@@ -35,25 +35,43 @@ import {
   Clock,
   BarChart3,
   AlertTriangle,
+  Eye,
+  Shield,
+  Brain,
+  PenTool,
 } from "lucide-react";
 import { cn, formatCost, timeAgo, getAgentColor } from "@/lib/utils";
 import { toast } from "sonner";
 
 const AGENT_ROLES = ["archaeologist", "skeptic", "visionary", "scribe"];
 
+const AGENT_ICONS: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+  archaeologist: Eye,
+  skeptic: Shield,
+  visionary: Brain,
+  scribe: PenTool,
+};
+
+const AGENT_DESCRIPTIONS: Record<string, string> = {
+  archaeologist: "Historian",
+  skeptic: "Devil's Advocate",
+  visionary: "Architect",
+  scribe: "Scribe",
+};
+
 function StatusIcon({ status }: { status: string }) {
-  if (status === "running") return <Loader2 className="w-4 h-4 animate-spin" style={{ color: "var(--cc-yellow)" }} />;
-  if (status === "completed") return <CheckCircle2 className="w-4 h-4" style={{ color: "var(--cc-green)" }} />;
-  if (status === "failed") return <XCircle className="w-4 h-4" style={{ color: "var(--cc-red)" }} />;
-  return <Clock className="w-4 h-4" style={{ color: "var(--cc-text-muted)" }} />;
+  if (status === "running") return <Loader2 className="w-4 h-4 animate-spin text-[var(--cc-yellow)]" />;
+  if (status === "completed") return <CheckCircle2 className="w-4 h-4 text-[var(--cc-green)]" />;
+  if (status === "failed") return <XCircle className="w-4 h-4 text-[var(--cc-red)]" />;
+  return <Clock className="w-4 h-4 text-[var(--cc-text-muted)]" />;
 }
 
 function SeverityBar({ finding_count }: { finding_count: number }) {
-  if (finding_count === 0) return <span style={{ color: "var(--cc-text-muted)" }}>—</span>;
+  if (finding_count === 0) return <span className="text-[var(--cc-text-muted)]">--</span>;
   return (
-    <div className="flex items-center gap-1">
-      <AlertTriangle className="w-3 h-3" style={{ color: "var(--cc-yellow)" }} />
-      <span className="text-sm" style={{ color: "var(--cc-text)" }}>{finding_count}</span>
+    <div className="flex items-center gap-1.5">
+      <AlertTriangle className="w-3 h-3 text-[var(--cc-yellow)]" />
+      <span className="text-sm font-medium text-[var(--cc-text)]">{finding_count}</span>
     </div>
   );
 }
@@ -121,12 +139,10 @@ export default function SessionsPage() {
   }), [runs]);
 
   return (
-    <div className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+    <div className="flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6 animate-fade-in">
       <div>
-        <h1 className="text-2xl font-bold" style={{ color: "var(--cc-text)" }}>
-          Sessions
-        </h1>
-        <p className="text-sm" style={{ color: "var(--cc-text-muted)" }}>
+        <h1 className="text-2xl font-bold text-[var(--cc-text)] tracking-tight">Sessions</h1>
+        <p className="text-sm text-[var(--cc-text-muted)] mt-1">
           All analysis sessions and their results
         </p>
       </div>
@@ -134,52 +150,38 @@ export default function SessionsPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
-          { label: "Total", value: stats.total, color: "var(--cc-text)", icon: BarChart3 },
-          { label: "Running", value: stats.running, color: "var(--cc-yellow)", icon: Loader2 },
-          { label: "Completed", value: stats.completed, color: "var(--cc-green)", icon: CheckCircle2 },
-          { label: "Failed", value: stats.failed, color: "var(--cc-red)", icon: XCircle },
-          { label: "Findings", value: stats.totalFindings, color: "var(--cc-yellow)", icon: AlertTriangle },
-          { label: "Total Cost", value: formatCost(stats.totalCost), color: "var(--cc-green)", icon: null },
-        ].map(({ label, value, color, icon: Icon }) => (
-          <Card
+          { label: "Total", value: stats.total, colorClass: "text-[var(--cc-text)]", icon: BarChart3 },
+          { label: "Running", value: stats.running, colorClass: "text-[var(--cc-yellow)]", icon: Loader2 },
+          { label: "Completed", value: stats.completed, colorClass: "text-[var(--cc-green)]", icon: CheckCircle2 },
+          { label: "Failed", value: stats.failed, colorClass: "text-[var(--cc-red)]", icon: XCircle },
+          { label: "Findings", value: stats.totalFindings, colorClass: "text-[var(--cc-yellow)]", icon: AlertTriangle },
+          { label: "Total Cost", value: formatCost(stats.totalCost), colorClass: "text-[var(--cc-green)]", icon: null },
+        ].map(({ label, value, colorClass, icon: Icon }) => (
+          <div
             key={label}
-            style={{ backgroundColor: "var(--cc-bg-card)", borderColor: "var(--cc-border)" }}
+            className="card-premium p-3 text-center hover-lift"
           >
-            <CardContent className="p-3 text-center">
-              {Icon && <Icon className="w-4 h-4 mx-auto mb-1" style={{ color }} />}
-              <div className="text-xl font-bold" style={{ color }}>{value}</div>
-              <div className="text-xs" style={{ color: "var(--cc-text-muted)" }}>{label}</div>
-            </CardContent>
-          </Card>
+            {Icon && <Icon className={cn("w-4 h-4 mx-auto mb-1", colorClass)} />}
+            <div className={cn("text-xl font-bold font-mono", colorClass)}>{value}</div>
+            <div className="text-xs text-[var(--cc-text-muted)] mt-0.5">{label}</div>
+          </div>
         ))}
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "var(--cc-text-muted)" }} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--cc-text-muted)]" />
           <Input
-            placeholder="Search sessions…"
+            placeholder="Search sessions..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            style={{
-              backgroundColor: "var(--cc-bg-card)",
-              borderColor: "var(--cc-border)",
-              color: "var(--cc-text)",
-            }}
+            className="pl-9 rounded-lg"
           />
         </div>
 
         <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-          <SelectTrigger
-            className="w-36"
-            style={{
-              backgroundColor: "var(--cc-bg-card)",
-              borderColor: "var(--cc-border)",
-              color: "var(--cc-text)",
-            }}
-          >
+          <SelectTrigger className="w-36 rounded-lg">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
           <SelectContent>
@@ -191,208 +193,173 @@ export default function SessionsPage() {
           </SelectContent>
         </Select>
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={loadRuns}
-          style={{ borderColor: "var(--cc-border)", color: "var(--cc-text)" }}
-        >
+        <Button variant="outline" size="sm" onClick={loadRuns} className="cursor-pointer rounded-lg">
           Refresh
         </Button>
       </div>
 
       {/* Table */}
-      <Card style={{ backgroundColor: "var(--cc-bg-card)", borderColor: "var(--cc-border)" }}>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="p-4 space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : filtered.length === 0 ? (
-            <div
-              className="py-12 text-center"
-              style={{ color: "var(--cc-text-muted)" }}
-            >
-              <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-              <p>No sessions found</p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow style={{ borderColor: "var(--cc-border)" }}>
-                  {["Status", "Repository", "Created", "Phase", "Findings", "Proposals", "Cost", "Actions"].map((h) => (
-                    <TableHead
-                      key={h}
-                      className="text-xs font-medium"
-                      style={{ color: "var(--cc-text-muted)" }}
-                    >
-                      {h}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((run) => (
-                  <TableRow
-                    key={run.id}
-                    className="cursor-pointer hover:bg-white/5 transition-colors"
-                    style={{ borderColor: "var(--cc-border)" }}
-                    onClick={() => router.push(`/debate/${run.id}`)}
+      <div className="card-premium overflow-hidden">
+        {loading ? (
+          <div className="p-4 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-14 w-full rounded-lg" />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center">
+            <BarChart3 className="w-10 h-10 mx-auto mb-3 text-[var(--cc-text-muted)] opacity-40" />
+            <p className="text-[var(--cc-text-muted)]">No sessions found</p>
+          </div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="border-[var(--cc-border)]">
+                {["Status", "Repository", "Created", "Phase", "Findings", "Proposals", "Cost", "Actions"].map((h) => (
+                  <TableHead
+                    key={h}
+                    className="text-xs font-semibold text-[var(--cc-text-muted)] uppercase tracking-wider"
                   >
-                    <TableCell>
-                      <StatusIcon status={run.status} />
-                    </TableCell>
-                    <TableCell>
-                      <div
-                        className="text-sm font-medium max-w-xs truncate"
-                        style={{ color: "var(--cc-text)" }}
-                      >
-                        {run.repo?.url || run.repo?.local_path || run.id}
-                      </div>
-                      <div
-                        className="text-xs mt-0.5"
-                        style={{
-                          color: "var(--cc-text-muted)",
-                          fontFamily: "var(--font-geist-mono)",
-                        }}
-                      >
-                        {run.id.slice(0, 8)}…
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-xs" style={{ color: "var(--cc-text-muted)" }}>
-                        {timeAgo(run.created_at)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {run.phase ? (
-                        <Badge
-                          variant="outline"
-                          className="text-xs"
-                          style={{ color: "var(--cc-accent)", borderColor: "var(--cc-accent)44" }}
-                        >
-                          {run.phase}
-                        </Badge>
-                      ) : (
-                        <span style={{ color: "var(--cc-text-muted)" }}>—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <SeverityBar finding_count={run.finding_count} />
-                    </TableCell>
-                    <TableCell>
-                      <span className="text-sm" style={{ color: "var(--cc-text)" }}>
-                        {run.proposal_count || 0}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <span
-                        className="text-sm"
-                        style={{
-                          color: "var(--cc-green)",
-                          fontFamily: "var(--font-geist-mono)",
-                        }}
-                      >
-                        {formatCost(run.total_cost)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div
-                        className="flex items-center gap-1"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <button
-                          onClick={() => router.push(`/debate/${run.id}`)}
-                          className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                          title="View debate"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" style={{ color: "var(--cc-text-muted)" }} />
-                        </button>
-                        {run.status === "completed" && (
-                          <button
-                            onClick={() => router.push(`/rfc/${run.id}`)}
-                            className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                            title="View RFC"
-                          >
-                            <FileText className="w-3.5 h-3.5" style={{ color: "var(--cc-accent)" }} />
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => handleDelete(run.id, e)}
-                          disabled={deleting === run.id}
-                          className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                          title="Delete"
-                        >
-                          {deleting === run.id ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "var(--cc-text-muted)" }} />
-                          ) : (
-                            <Trash2 className="w-3.5 h-3.5" style={{ color: "var(--cc-red)" }} />
-                          )}
-                        </button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                    {h}
+                  </TableHead>
                 ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((run) => (
+                <TableRow
+                  key={run.id}
+                  className="cursor-pointer hover:bg-[var(--cc-bg-hover)] transition-all duration-300 border-[var(--cc-border)] group"
+                  onClick={() => router.push(`/debate/${run.id}`)}
+                >
+                  <TableCell>
+                    <StatusIcon status={run.status} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm font-medium max-w-xs truncate text-[var(--cc-text)] group-hover:text-white transition-colors duration-200">
+                      {run.repo?.url || run.repo?.local_path || run.id}
+                    </div>
+                    <div className="text-xs mt-0.5 font-mono text-[var(--cc-text-muted)]">
+                      {run.id.slice(0, 8)}...
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-xs text-[var(--cc-text-muted)]">
+                      {timeAgo(run.created_at)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {run.phase ? (
+                      <Badge
+                        variant="outline"
+                        className="text-xs text-[var(--cc-accent)] border-[var(--cc-accent-muted)]"
+                      >
+                        {run.phase}
+                      </Badge>
+                    ) : (
+                      <span className="text-[var(--cc-text-muted)]">--</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <SeverityBar finding_count={run.finding_count} />
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm font-medium text-[var(--cc-text)]">
+                      {run.proposal_count || 0}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className="text-sm font-mono text-[var(--cc-green)]">
+                      {formatCost(run.total_cost)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div
+                      className="flex items-center gap-1"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        onClick={() => router.push(`/debate/${run.id}`)}
+                        className="p-1.5 rounded-md cursor-pointer hover:bg-[var(--cc-bg-hover)] transition-colors duration-200"
+                        title="View debate"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-[var(--cc-text-muted)]" />
+                      </button>
+                      {run.status === "completed" && (
+                        <button
+                          onClick={() => router.push(`/rfc/${run.id}`)}
+                          className="p-1.5 rounded-md cursor-pointer hover:bg-[var(--cc-bg-hover)] transition-colors duration-200"
+                          title="View RFC"
+                        >
+                          <FileText className="w-3.5 h-3.5 text-[var(--cc-accent)]" />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => handleDelete(run.id, e)}
+                        disabled={deleting === run.id}
+                        className="p-1.5 rounded-md cursor-pointer hover:bg-[var(--cc-red-muted)] transition-colors duration-200"
+                        title="Delete"
+                      >
+                        {deleting === run.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--cc-text-muted)]" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5 text-[var(--cc-red)]" />
+                        )}
+                      </button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
 
       {/* Agent Memory Cards */}
       <div>
-        <h2 className="text-lg font-semibold mb-3" style={{ color: "var(--cc-text)" }}>
+        <h2 className="text-lg font-semibold mb-4 text-[var(--cc-text)] tracking-tight">
           Agent Memory
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {AGENT_ROLES.map((agent) => {
             const color = getAgentColor(agent);
-            const agentRuns = runs.filter((r) =>
-              r.status === "completed"
-            );
+            const agentRuns = runs.filter((r) => r.status === "completed");
+            const Icon = AGENT_ICONS[agent] || Eye;
             return (
-              <Card
+              <div
                 key={agent}
-                style={{
-                  backgroundColor: "var(--cc-bg-card)",
-                  borderColor: `${color}44`,
-                }}
+                className="card-premium hover-lift overflow-hidden"
               >
-                <CardHeader className="pb-2">
-                  <CardTitle
-                    className="text-sm flex items-center gap-2"
-                    style={{ color }}
-                  >
+                <div
+                  className="h-1 w-full"
+                  style={{ backgroundColor: color }}
+                />
+                <div className="p-4">
+                  <div className="flex items-center gap-2 mb-3">
                     <div
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: color }}
-                    />
-                    {agent}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-1 text-xs">
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: `color-mix(in srgb, ${color} 18%, transparent)` }}
+                    >
+                      <Icon className="w-4 h-4" style={{ color }} />
+                    </div>
+                    <span className="text-sm font-semibold capitalize" style={{ color }}>
+                      {agent}
+                    </span>
+                  </div>
+                  <div className="space-y-2 text-xs">
                     <div className="flex justify-between">
-                      <span style={{ color: "var(--cc-text-muted)" }}>Sessions</span>
-                      <span style={{ color: "var(--cc-text)" }}>{agentRuns.length}</span>
+                      <span className="text-[var(--cc-text-muted)]">Sessions</span>
+                      <span className="text-[var(--cc-text)] font-mono font-medium">{agentRuns.length}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span style={{ color: "var(--cc-text-muted)" }}>Role</span>
-                      <span style={{ color }}>
-                        {agent === "archaeologist"
-                          ? "Historian"
-                          : agent === "skeptic"
-                          ? "Devil's Advocate"
-                          : agent === "visionary"
-                          ? "Architect"
-                          : "Scribe"}
+                      <span className="text-[var(--cc-text-muted)]">Role</span>
+                      <span className="font-medium" style={{ color }}>
+                        {AGENT_DESCRIPTIONS[agent]}
                       </span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             );
           })}
         </div>

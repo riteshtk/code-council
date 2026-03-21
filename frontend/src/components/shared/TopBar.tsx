@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { BookOpen, Home, Settings, History, Cpu } from "lucide-react";
+import { Home, Settings, History, Zap } from "lucide-react";
 
 const NAV_LINKS = [
   { href: "/", label: "Home", icon: Home },
@@ -15,70 +15,49 @@ export function TopBar() {
   const pathname = usePathname();
 
   return (
-    <header
-      className="sticky top-0 z-50 flex items-center justify-between px-6 py-3 border-b"
-      style={{
-        backgroundColor: "var(--cc-bg-card)",
-        borderColor: "var(--cc-border)",
-      }}
-    >
-      {/* Logo */}
-      <Link href="/" className="flex items-center gap-2 group">
-        <div
-          className="flex items-center justify-center w-8 h-8 rounded-lg"
-          style={{ backgroundColor: "var(--cc-accent)" }}
-        >
-          <Cpu className="w-5 h-5 text-white" />
-        </div>
-        <div>
-          <span
-            className="font-bold text-lg tracking-tight"
-            style={{ color: "var(--cc-text)" }}
-          >
-            Code
+    <header className="sticky top-0 z-50 border-b border-[var(--cc-border)] glass">
+      <div className="flex items-center justify-between px-6 h-14 max-w-7xl mx-auto w-full">
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-2.5 group">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--cc-accent)] shadow-[0_2px_10px_rgba(108,92,231,0.4)] group-hover:shadow-[0_4px_20px_rgba(108,92,231,0.55)] transition-all duration-300">
+            <Zap className="w-4 h-4 text-white" />
+          </div>
+          <span className="font-bold text-lg tracking-tight">
+            <span className="text-[var(--cc-text)]">Code</span>
+            <span className="text-[var(--cc-accent)]">Council</span>
           </span>
-          <span
-            className="font-bold text-lg tracking-tight"
-            style={{ color: "var(--cc-accent)" }}
-          >
-            Council
-          </span>
+        </Link>
+
+        {/* Nav */}
+        <nav className="flex items-center gap-1 bg-[var(--cc-bg-elevated)] rounded-xl p-1 border border-[var(--cc-border)]">
+          {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+            const isActive = href === "/" ? pathname === "/" : pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  "flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-300",
+                  isActive
+                    ? "bg-[var(--cc-accent)] text-white shadow-[0_2px_10px_rgba(108,92,231,0.35)] glow-sm"
+                    : "text-[var(--cc-text-muted)] hover:text-[var(--cc-text)] hover:bg-[var(--cc-bg-hover)]"
+                )}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        {/* Status */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--cc-bg-elevated)] border border-[var(--cc-border)]">
+            <div className="w-2 h-2 rounded-full bg-[var(--cc-green)] animate-pulse-glow" />
+            <span className="text-xs font-medium text-[var(--cc-text-secondary)]">Online</span>
+          </div>
+          <span className="text-xs font-mono text-[var(--cc-text-muted)]">v0.1.0</span>
         </div>
-      </Link>
-
-      {/* Nav */}
-      <nav className="flex items-center gap-1">
-        {NAV_LINKS.map(({ href, label, icon: Icon }) => {
-          const isActive =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
-                isActive
-                  ? "text-white"
-                  : "hover:opacity-80"
-              )}
-              style={{
-                backgroundColor: isActive ? "var(--cc-accent)" : "transparent",
-                color: isActive ? "white" : "var(--cc-text-muted)",
-              }}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
-
-      {/* Status */}
-      <div className="flex items-center gap-2">
-        <BookOpen className="w-4 h-4" style={{ color: "var(--cc-text-muted)" }} />
-        <span className="text-xs" style={{ color: "var(--cc-text-muted)" }}>
-          v0.1.0
-        </span>
       </div>
     </header>
   );
