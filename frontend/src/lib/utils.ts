@@ -27,9 +27,10 @@ export function getAgentColor(agentId: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export function formatCost(cost: number): string {
-  if (cost < 0.01) return `$${(cost * 100).toFixed(3)}¢`;
-  return `$${cost.toFixed(4)}`;
+export function formatCost(cost: number | undefined | null): string {
+  const c = cost ?? 0;
+  if (c < 0.01) return `$${(c * 100).toFixed(3)}¢`;
+  return `$${c.toFixed(4)}`;
 }
 
 export function formatTokens(tokens: number): string {
@@ -38,9 +39,11 @@ export function formatTokens(tokens: number): string {
   return String(tokens);
 }
 
-export function timeAgo(dateString: string): string {
+export function timeAgo(dateString: string | undefined | null): string {
+  if (!dateString) return "—";
   const now = Date.now();
   const then = new Date(dateString).getTime();
+  if (isNaN(then)) return "—";
   const diff = Math.floor((now - then) / 1000);
   if (diff < 60) return `${diff}s ago`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
