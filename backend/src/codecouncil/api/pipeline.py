@@ -1,4 +1,4 @@
-"""Real council analysis pipeline — clones repo, calls GPT-4o, generates RFC."""
+"""Real council analysis pipeline — clones repo, calls OpenAI, generates RFC."""
 from __future__ import annotations
 
 import asyncio
@@ -11,6 +11,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from openai import AsyncOpenAI
+
+# ── Model configuration ──
+# Heavy thinking tasks (analysis, debate, RFC) use the best model
+# Light tasks (voting) use a fast model to save cost
+MODEL_HEAVY = "gpt-4o"       # Best reasoning: analysis, debate, RFC
+MODEL_LIGHT = "gpt-4o-mini"  # Fast + cheap: voting, short responses
+MAX_TOKENS_ANALYSIS = 4096   # Agent analysis — needs room for detailed findings
+MAX_TOKENS_DEBATE = 3000     # Debate responses — thorough argumentation
+MAX_TOKENS_VOTE = 300        # Vote — short, structured
+MAX_TOKENS_RFC = 8192        # RFC — comprehensive institutional document
 
 
 def _load_api_key() -> str:
@@ -269,9 +279,9 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             emit(agent_name, "agent_thinking", f"{agent_name.capitalize()} analyzing repository...", "analysing")
             try:
                 response = await client.chat.completions.create(
-                    model="gpt-4o",
+                    model=MODEL_HEAVY,
                     messages=[{"role": "system", "content": prompt}],
-                    max_tokens=2500,
+                    max_tokens=MAX_TOKENS_ANALYSIS,
                     temperature=_temperatures.get(agent_name, 0.3),
                 )
                 text = response.choices[0].message.content or ""
@@ -282,7 +292,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 emit(
                     agent_name, "agent_response", text, "analysing",
                     metadata={
-                        "provider": "openai", "model": "gpt-4o",
+                        "provider": "openai", "model": MODEL_HEAVY,
                         "input_tokens": tokens_in, "output_tokens": tokens_out,
                         "cost_usd": cost,
                     },
@@ -364,16 +374,16 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         )
 
         proposal_response = await client.chat.completions.create(
-            model="gpt-4o",
+            model=MODEL_HEAVY,
             messages=[{"role": "system", "content": proposal_prompt}],
-            max_tokens=1200,
+            max_tokens=MAX_TOKENS_DEBATE,
             temperature=0.6,
         )
         proposal_text = proposal_response.choices[0].message.content or ""
         emit(
             "visionary", "agent_response", proposal_text, "debate",
             metadata={
-                "provider": "openai", "model": "gpt-4o",
+                "provider": "openai", "model": MODEL_HEAVY,
                 "input_tokens": proposal_response.usage.prompt_tokens if proposal_response.usage else 0,
                 "output_tokens": proposal_response.usage.completion_tokens if proposal_response.usage else 0,
             },
@@ -462,14 +472,14 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 )
 
             challenge_response = await client.chat.completions.create(
-                model="gpt-4o",
+                model=MODEL_HEAVY,
                 messages=[{"role": "system", "content": challenge_prompt}],
-                max_tokens=1500,
+                max_tokens=MAX_TOKENS_DEBATE,
                 temperature=0.2,
             )
             challenge_text = challenge_response.choices[0].message.content or ""
             emit("skeptic", "agent_speaking", challenge_text, "debate",
-                 metadata={"provider": "openai", "model": "gpt-4o",
+                 metadata={"provider": "openai", "model": MODEL_HEAVY,
                            "input_tokens": challenge_response.usage.prompt_tokens if challenge_response.usage else 0,
                            "output_tokens": challenge_response.usage.completion_tokens if challenge_response.usage else 0})
 
@@ -494,14 +504,14 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 )
 
             visionary_defend = await client.chat.completions.create(
-                model="gpt-4o",
+                model=MODEL_HEAVY,
                 messages=[{"role": "system", "content": visionary_defend_prompt}],
-                max_tokens=1500,
+                max_tokens=MAX_TOKENS_DEBATE,
                 temperature=0.5,
             )
             visionary_response_text = visionary_defend.choices[0].message.content or ""
             emit("visionary", "agent_speaking", visionary_response_text, "debate",
-                 metadata={"provider": "openai", "model": "gpt-4o",
+                 metadata={"provider": "openai", "model": MODEL_HEAVY,
                            "input_tokens": visionary_defend.usage.prompt_tokens if visionary_defend.usage else 0,
                            "output_tokens": visionary_defend.usage.completion_tokens if visionary_defend.usage else 0})
 
@@ -526,14 +536,14 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 "State which side the data supports for each proposal. Be neutral and data-driven."
             )
             evidence_response = await client.chat.completions.create(
-                model="gpt-4o",
+                model=MODEL_HEAVY,
                 messages=[{"role": "system", "content": evidence_prompt}],
-                max_tokens=1200,
+                max_tokens=MAX_TOKENS_DEBATE,
                 temperature=0.3,
             )
             evidence_text = evidence_response.choices[0].message.content or ""
             emit("archaeologist", "agent_speaking", evidence_text, "debate",
-                 metadata={"provider": "openai", "model": "gpt-4o",
+                 metadata={"provider": "openai", "model": MODEL_HEAVY,
                            "input_tokens": evidence_response.usage.prompt_tokens if evidence_response.usage else 0,
                            "output_tokens": evidence_response.usage.completion_tokens if evidence_response.usage else 0})
 
@@ -573,12 +583,12 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             for agent in ["archaeologist", "skeptic", "visionary"]:
                 try:
                     vote_response = await client.chat.completions.create(
-                        model="gpt-4o",
+                        model=MODEL_LIGHT,
                         messages=[{
                             "role": "system",
                             "content": f"You are the {agent.capitalize()} agent. {vote_prompt}",
                         }],
-                        max_tokens=150,
+                        max_tokens=MAX_TOKENS_VOTE,
                         temperature=0.2,
                     )
                     vote_text = vote_response.choices[0].message.content or ""
@@ -744,9 +754,9 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         )
 
         rfc_response = await client.chat.completions.create(
-            model="gpt-4o",
+            model=MODEL_HEAVY,
             messages=[{"role": "system", "content": rfc_prompt}],
-            max_tokens=4096,
+            max_tokens=MAX_TOKENS_RFC,
             temperature=0.1,
         )
         rfc_content = rfc_response.choices[0].message.content or ""
@@ -755,7 +765,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         emit(
             "scribe", "agent_response", "RFC synthesis complete", "output",
             metadata={
-                "provider": "openai", "model": "gpt-4o",
+                "provider": "openai", "model": MODEL_HEAVY,
                 "input_tokens": rfc_response.usage.prompt_tokens if rfc_response.usage else 0,
                 "output_tokens": rfc_response.usage.completion_tokens if rfc_response.usage else 0,
             },
