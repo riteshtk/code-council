@@ -1,120 +1,136 @@
 "use client";
 
-import type { Proposal, Vote } from "@/lib/types";
+import type { Proposal } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
-import { ThumbsUp, ThumbsDown, Minus, Edit3 } from "lucide-react";
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: "var(--cc-text-muted)",
-  voting: "var(--cc-yellow)",
-  accepted: "var(--cc-green)",
-  rejected: "var(--cc-red)",
-  amended: "var(--cc-blue)",
+const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  pending: { bg: "rgba(136,136,160,0.15)", color: "var(--cc-text-muted)", label: "PENDING" },
+  voting: { bg: "rgba(108,92,231,0.2)", color: "var(--cc-accent)", label: "VOTING" },
+  accepted: { bg: "rgba(0,214,143,0.2)", color: "var(--cc-green)", label: "PASSED" },
+  rejected: { bg: "rgba(255,107,107,0.2)", color: "var(--cc-red)", label: "REJECTED" },
+  amended: { bg: "rgba(255,217,61,0.2)", color: "var(--cc-yellow)", label: "REVISED" },
+  proposed: { bg: "rgba(108,92,231,0.15)", color: "var(--cc-accent)", label: "PROPOSED" },
+  revised: { bg: "rgba(255,217,61,0.2)", color: "var(--cc-yellow)", label: "REVISED" },
+  withdrawn: { bg: "rgba(136,136,160,0.15)", color: "var(--cc-text-muted)", label: "WITHDRAWN" },
+  deadlocked: { bg: "rgba(255,107,107,0.15)", color: "var(--cc-red)", label: "DEADLOCKED" },
 };
 
-const VOTE_ICONS: Record<string, React.ReactNode> = {
-  approve: <ThumbsUp className="w-3 h-3" />,
-  reject: <ThumbsDown className="w-3 h-3" />,
-  abstain: <Minus className="w-3 h-3" />,
-  amend: <Edit3 className="w-3 h-3" />,
+const EFFORT_STYLES: Record<string, { bg: string; color: string }> = {
+  XS: { bg: "rgba(0,214,143,0.15)", color: "var(--cc-green)" },
+  S: { bg: "rgba(0,214,143,0.15)", color: "var(--cc-green)" },
+  M: { bg: "rgba(255,217,61,0.15)", color: "var(--cc-yellow)" },
+  L: { bg: "rgba(255,107,107,0.15)", color: "var(--cc-red)" },
+  XL: { bg: "rgba(255,107,107,0.2)", color: "var(--cc-red)" },
 };
-
-const VOTE_COLORS: Record<string, string> = {
-  approve: "var(--cc-green)",
-  reject: "var(--cc-red)",
-  abstain: "var(--cc-text-muted)",
-  amend: "var(--cc-yellow)",
-};
-
-function VoteDot({ vote }: { vote: Vote }) {
-  const agentColor = getAgentColor(vote.agent_id);
-  const voteColor = VOTE_COLORS[vote.vote_type] || "var(--cc-text-muted)";
-
-  return (
-    <div
-      className="flex items-center justify-center w-6 h-6 rounded-full border"
-      style={{
-        borderColor: agentColor,
-        backgroundColor: `${voteColor}22`,
-        color: voteColor,
-      }}
-      title={`${vote.agent_id}: ${vote.vote_type}`}
-    >
-      {VOTE_ICONS[vote.vote_type] || <Minus className="w-3 h-3" />}
-    </div>
-  );
-}
 
 function ProposalCard({ proposal }: { proposal: Proposal }) {
-  const statusColor = STATUS_COLORS[proposal.status] || "var(--cc-text-muted)";
+  const status = STATUS_STYLES[proposal.status] || STATUS_STYLES.pending;
+  const isDeadlocked = proposal.status === "deadlocked" ||
+    (proposal.status === "rejected" && (proposal.votes?.length ?? 0) > 0);
+  const effort = proposal.effort ? (EFFORT_STYLES[proposal.effort] || null) : null;
+  const author = proposal.author_agent || proposal.agent_id || "unknown";
+  const displayId = `P-${proposal.proposal_number ?? "?"}`;
 
   return (
     <div
-      className="flex-shrink-0 w-64 rounded-lg border p-3 mr-3"
+      className="shrink-0 rounded-[10px] border transition-all duration-200"
       style={{
+        minWidth: "220px",
+        padding: "12px 16px",
         backgroundColor: "var(--cc-bg)",
-        borderColor: proposal.status === "accepted"
-          ? "var(--cc-green)"
-          : proposal.status === "rejected"
+        borderColor: isDeadlocked
           ? "var(--cc-red)"
+          : proposal.status === "amended" || proposal.status === "revised"
+          ? "var(--cc-yellow)"
           : "var(--cc-border)",
+        borderWidth: isDeadlocked ? "2px" : "1px",
       }}
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
+      {/* Header: ID + Status */}
+      <div className="flex items-center justify-between mb-1.5">
+        <span
+          className="text-[11px] font-mono"
+          style={{ color: "var(--cc-text-muted)" }}
+        >
+          {displayId}
+        </span>
+        <span
+          className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase"
+          style={{ backgroundColor: status.bg, color: status.color }}
+        >
+          {status.label}
+        </span>
+      </div>
+
+      {/* Title + Effort badge */}
+      <div className="flex items-start gap-1.5 mb-1">
         <div
-          className="text-xs font-medium leading-tight flex-1"
+          className="text-[13px] font-semibold flex-1"
           style={{ color: "var(--cc-text)" }}
         >
           {proposal.title}
         </div>
-        <Badge
-          variant="outline"
-          className="text-xs shrink-0"
-          style={{
-            borderColor: `${statusColor}66`,
-            color: statusColor,
-            backgroundColor: `${statusColor}11`,
-          }}
-        >
-          {proposal.status}
-        </Badge>
+        {effort && proposal.effort && (
+          <span
+            className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-semibold"
+            style={{ backgroundColor: effort.bg, color: effort.color }}
+          >
+            {proposal.effort}
+          </span>
+        )}
       </div>
 
-      <p
-        className="text-xs leading-relaxed mb-2 line-clamp-2"
+      {/* Author */}
+      <div
+        className="text-[11px] mb-2"
         style={{ color: "var(--cc-text-muted)" }}
       >
-        {proposal.description}
-      </p>
+        by {author}
+      </div>
 
-      {/* Vote dots */}
+      {/* Vote tally dots */}
       {proposal.votes && proposal.votes.length > 0 && (
-        <div className="flex items-center gap-1.5 mt-2">
-          <span className="text-xs" style={{ color: "var(--cc-text-muted)" }}>
-            Votes:
-          </span>
-          {proposal.votes.map((v) => (
-            <VoteDot key={v.id} vote={v} />
-          ))}
-        </div>
-      )}
-
-      {/* Vote tally */}
-      {proposal.votes && proposal.votes.length > 0 && (
-        <div className="flex items-center gap-3 mt-2 text-xs" style={{ color: "var(--cc-text-muted)" }}>
-          <span style={{ color: "var(--cc-green)" }}>
-            ↑{proposal.votes.filter((v) => v.vote_type === "approve").length}
-          </span>
-          <span style={{ color: "var(--cc-red)" }}>
-            ↓{proposal.votes.filter((v) => v.vote_type === "reject").length}
-          </span>
-          {proposal.votes.filter((v) => v.vote_type === "amend").length > 0 && (
-            <span style={{ color: "var(--cc-yellow)" }}>
-              ✎{proposal.votes.filter((v) => v.vote_type === "amend").length}
-            </span>
-          )}
+        <div className="flex gap-1.5 mt-2">
+          {proposal.votes.map((v) => {
+            const isYes = v.vote_type === "approve" || v.vote === "YES";
+            const isNo = v.vote_type === "reject" || v.vote === "NO";
+            const isAbstain = !isYes && !isNo;
+            return (
+              <div
+                key={v.id}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold"
+                style={{
+                  backgroundColor: isYes
+                    ? "rgba(0,214,143,0.2)"
+                    : isNo
+                    ? "rgba(255,107,107,0.2)"
+                    : "rgba(136,136,160,0.2)",
+                  color: isYes
+                    ? "var(--cc-green)"
+                    : isNo
+                    ? "var(--cc-red)"
+                    : "var(--cc-text-muted)",
+                }}
+              >
+                {isYes ? "Y" : isNo ? "N" : "-"}
+              </div>
+            );
+          })}
+          {/* Show pending dots if less than 3 votes */}
+          {proposal.votes.length < 3 &&
+            Array.from({ length: 3 - proposal.votes.length }).map((_, i) => (
+              <div
+                key={`pending-${i}`}
+                className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold border border-dashed"
+                style={{
+                  backgroundColor: "var(--cc-bg-card)",
+                  borderColor: "var(--cc-border)",
+                  color: "var(--cc-text-muted)",
+                }}
+              >
+                ?
+              </div>
+            ))}
         </div>
       )}
     </div>
@@ -126,44 +142,54 @@ interface ProposalTrackerProps {
 }
 
 export function ProposalTracker({ proposals }: ProposalTrackerProps) {
+  const passed = proposals.filter((p) => p.status === "accepted").length;
+  const rejected = proposals.filter((p) => p.status === "rejected").length;
+  const amended = proposals.filter(
+    (p) => p.status === "amended" || p.status === "revised"
+  ).length;
+
   return (
     <div
-      className="rounded-lg border overflow-hidden"
+      className="border-t"
       style={{
+        gridColumn: "1 / -1",
+        padding: "14px 20px",
         backgroundColor: "var(--cc-bg-card)",
         borderColor: "var(--cc-border)",
       }}
     >
-      <div
-        className="flex items-center justify-between px-3 py-2 border-b"
-        style={{ borderColor: "var(--cc-border)" }}
-      >
-        <h3 className="text-sm font-medium" style={{ color: "var(--cc-text)" }}>
-          Proposals
-        </h3>
-        <Badge
-          variant="outline"
-          className="text-xs"
-          style={{ color: "var(--cc-text-muted)", borderColor: "var(--cc-border)" }}
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2.5">
+        <h3
+          className="text-[13px] font-semibold"
+          style={{ color: "var(--cc-text)" }}
         >
-          {proposals.length}
-        </Badge>
-      </div>
-
-      {proposals.length === 0 ? (
+          Proposal Tracker
+        </h3>
         <div
-          className="py-6 text-center text-xs"
+          className="text-xs"
           style={{ color: "var(--cc-text-muted)" }}
         >
-          No proposals yet…
+          {proposals.length} proposals
+          {passed > 0 && ` \u00b7 ${passed} passed`}
+          {amended > 0 && ` \u00b7 ${amended} revised`}
+          {rejected > 0 && ` \u00b7 ${rejected} rejected`}
+        </div>
+      </div>
+
+      {/* Cards - horizontal scroll */}
+      {proposals.length === 0 ? (
+        <div
+          className="py-4 text-center text-xs"
+          style={{ color: "var(--cc-text-muted)" }}
+        >
+          No proposals yet...
         </div>
       ) : (
-        <div className="p-3 overflow-x-auto">
-          <div className="flex">
-            {proposals.map((p) => (
-              <ProposalCard key={p.id} proposal={p} />
-            ))}
-          </div>
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {proposals.map((p) => (
+            <ProposalCard key={p.id} proposal={p} />
+          ))}
         </div>
       )}
     </div>

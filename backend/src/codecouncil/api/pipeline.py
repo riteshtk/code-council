@@ -271,7 +271,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 response = await client.chat.completions.create(
                     model="gpt-4o",
                     messages=[{"role": "system", "content": prompt}],
-                    max_tokens=1500,
+                    max_tokens=2500,
                     temperature=_temperatures.get(agent_name, 0.3),
                 )
                 text = response.choices[0].message.content or ""
@@ -464,7 +464,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             challenge_response = await client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "system", "content": challenge_prompt}],
-                max_tokens=1000,
+                max_tokens=1500,
                 temperature=0.2,
             )
             challenge_text = challenge_response.choices[0].message.content or ""
@@ -496,7 +496,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             visionary_defend = await client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "system", "content": visionary_defend_prompt}],
-                max_tokens=1000,
+                max_tokens=1500,
                 temperature=0.5,
             )
             visionary_response_text = visionary_defend.choices[0].message.content or ""
@@ -528,7 +528,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             evidence_response = await client.chat.completions.create(
                 model="gpt-4o",
                 messages=[{"role": "system", "content": evidence_prompt}],
-                max_tokens=800,
+                max_tokens=1200,
                 temperature=0.3,
             )
             evidence_text = evidence_response.choices[0].message.content or ""
@@ -653,35 +653,100 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 f"[{status_label}]\n{vote_lines}\n"
             )
 
+        # Build full findings list for RFC (not truncated)
+        findings_by_severity = {"critical": [], "high": [], "medium": [], "info": []}
+        for f in all_findings:
+            bucket = findings_by_severity.get(f["severity"], findings_by_severity["info"])
+            bucket.append(f)
+        full_findings_text = ""
+        for sev in ["critical", "high", "medium", "info"]:
+            group = findings_by_severity[sev]
+            if group:
+                full_findings_text += f"\n**{sev.upper()} ({len(group)})**\n"
+                for f in group:
+                    full_findings_text += (
+                        f"- [{f['agent'].upper()}] {f['content']}\n"
+                        f"  _Implication:_ {f.get('implication', 'N/A')}\n"
+                    )
+
+        # Build full vote detail block
+        full_vote_details = ""
+        for proposal in proposals:
+            p_votes = [v for v in all_votes if v["proposal_id"] == proposal["id"]]
+            status_label = "PASSED" if proposal["status"] == "accepted" else "FAILED"
+            full_vote_details += (
+                f"\n#### P-{proposal['proposal_number']}: {proposal['title']} [{status_label}]\n"
+                f"Effort: {proposal.get('effort', 'N/A')} | "
+                f"Breaking: {'YES' if proposal.get('breaking_change') else 'NO'} | "
+                f"Author: {proposal.get('author_agent', 'visionary')}\n"
+                f"Description: {proposal.get('description', '')}\n\n"
+                "| Agent | Vote | Confidence | Rationale |\n"
+                "|---|---|---|---|\n"
+            )
+            for v in p_votes:
+                full_vote_details += (
+                    f"| {v['agent'].capitalize()} | **{v['vote']}** | {v['confidence']:.0%} "
+                    f"| {v['rationale'][:120]} |\n"
+                )
+            no_votes = [v for v in p_votes if v["vote"] == "NO"]
+            for v in no_votes:
+                full_vote_details += (
+                    f"\n> **DISSENT ({v['agent'].capitalize()}):** {v['rationale']}\n"
+                )
+
         rfc_prompt = (
-            "You are the Scribe -- the council's neutral secretary. Write the RFC "
-            f"document for the council's analysis of {repo_org}/{repo_name}.\n\n"
-            "You must preserve every agent's voice. Do not smooth over disagreements. "
-            "Quote agents directly.\n\n"
-            f"Repository: {repo_org}/{repo_name} ({repo_url})\n"
-            f"Files: {len(files)}, LOC: {total_loc:,}, Languages: {lang_summary}\n"
-            f"Authors: {len(authors)}\n\n"
-            "Agent Analyses:\n"
-            f"ARCHAEOLOGIST: {agent_analyses.get('archaeologist', '')[:600]}\n"
-            f"SKEPTIC: {agent_analyses.get('skeptic', '')[:600]}\n"
-            f"VISIONARY (proposals): {proposal_text[:600]}\n"
-            f"SKEPTIC (challenges): {challenge_text[:400]}\n"
-            f"ARCHAEOLOGIST (evidence): {evidence_text[:400]}\n\n"
-            f"Votes:\n{vote_summary}\n\n"
-            "Write the RFC with these sections:\n"
-            "1. Header (repo, date, agents, consensus score)\n"
-            "2. Executive Summary (3-4 sentences)\n"
-            f"3. Critical Findings (list all {len(all_findings)} findings with severity)\n"
-            "4. Proposals & Votes (each proposal with vote matrix and any dissent)\n"
-            "5. Action Items (numbered, from passed proposals)\n"
-            "6. Cost Summary\n\n"
-            "Use markdown formatting. Be thorough but concise."
+            "You are the Scribe — the council's neutral secretary and institutional historian. "
+            "Your job is to produce a PREMIUM, publication-ready RFC document. "
+            "This is NOT a summary. It is a formal institutional record.\n\n"
+            "REQUIREMENTS:\n"
+            "- Use proper markdown with ## section headers and ### sub-headers\n"
+            "- Write the Executive Summary as a highlighted blockquote (> prefix)\n"
+            "- Preserve every agent's voice verbatim — do NOT paraphrase or smooth over disagreements\n"
+            "- Quote agents directly using their name (e.g., 'The Skeptic noted: ...')\n"
+            "- Make it read like an institutional document, not a bullet-point summary\n"
+            "- Every section must be substantive and detailed\n\n"
+            f"## REPOSITORY\n"
+            f"**{repo_org}/{repo_name}** | {repo_url}\n"
+            f"Files: {len(files)} | LOC: {total_loc:,} | Languages: {lang_summary}\n"
+            f"Authors: {len(authors)} | Analysis date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n\n"
+            "## FULL AGENT ANALYSES\n\n"
+            f"### Archaeologist (full)\n{agent_analyses.get('archaeologist', '')}\n\n"
+            f"### Skeptic (full)\n{agent_analyses.get('skeptic', '')}\n\n"
+            f"### Visionary — Proposals\n{proposal_text}\n\n"
+            f"### Skeptic — Challenges\n{challenge_text}\n\n"
+            f"### Archaeologist — Debate Evidence\n{evidence_text}\n\n"
+            "## FULL FINDINGS\n"
+            f"{full_findings_text}\n\n"
+            "## FULL VOTE RECORD\n"
+            f"{full_vote_details}\n\n"
+            "---\n\n"
+            "NOW WRITE THE RFC DOCUMENT with EXACTLY these sections:\n\n"
+            "## RFC: [Repository Name] — Council Analysis Report\n"
+            "*(header block: repo, date, participating agents, consensus score)*\n\n"
+            "## Executive Summary\n"
+            "> *(3-5 sentences as a blockquote — the single most important takeaway, "
+            "overall health assessment, and top recommendation)*\n\n"
+            "## Findings\n"
+            "*(Organized by severity: CRITICAL first, then HIGH, MEDIUM, INFO. "
+            "Each finding gets: severity badge in bold, agent attribution in brackets, "
+            "the finding title, and its implication on a new line.)*\n\n"
+            "## Proposals & Council Vote\n"
+            f"*(All {len(proposals)} proposals. Each proposal gets: full description, "
+            "a vote matrix table with columns Agent | Vote | Confidence | Rationale, "
+            "outcome (PASSED/FAILED), and a DISSENT block for any NO votes with full rationale.)*\n\n"
+            "## Action Items\n"
+            "*(Numbered list from PASSED proposals only. Each item: action description, "
+            "effort badge [XS/S/M/L/XL], and responsible area. "
+            "If a proposal was REJECTED, note it was considered but not adopted.)*\n\n"
+            "## Cost Summary\n"
+            "*(Table: Phase | Tokens | Estimated Cost USD — plus a total row)*\n\n"
+            "Write the complete document now. Be thorough. Every section must be substantive."
         )
 
         rfc_response = await client.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "system", "content": rfc_prompt}],
-            max_tokens=3000,
+            max_tokens=4096,
             temperature=0.1,
         )
         rfc_content = rfc_response.choices[0].message.content or ""

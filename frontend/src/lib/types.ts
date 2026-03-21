@@ -31,7 +31,11 @@ export type ProposalStatus =
   | "voting"
   | "accepted"
   | "rejected"
-  | "amended";
+  | "amended"
+  | "proposed"
+  | "revised"
+  | "withdrawn"
+  | "deadlocked";
 
 export type VoteType = "approve" | "reject" | "abstain" | "amend";
 
@@ -64,8 +68,12 @@ export interface Vote {
   id: string;
   proposal_id: string;
   agent_id: string;
+  agent?: string;
   vote_type: VoteType;
+  vote?: "YES" | "NO" | "ABSTAIN";
   reasoning?: string;
+  rationale?: string;
+  confidence?: number;
   created_at: string;
 }
 
@@ -73,8 +81,14 @@ export interface Proposal {
   id: string;
   run_id: string;
   agent_id: string;
+  author_agent?: string;
   title: string;
   description: string;
+  goal?: string;
+  effort?: string;
+  proposal_number?: number;
+  version?: number;
+  breaking_change?: boolean;
   finding_ids: string[];
   status: ProposalStatus;
   votes: Vote[];
