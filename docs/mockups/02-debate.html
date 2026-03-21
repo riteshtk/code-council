@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeCouncil — Debate Page Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f;
+    --bg-card: #12121a;
+    --bg-hover: #1a1a28;
+    --border: #1e1e2e;
+    --text: #e8e8f0;
+    --text-muted: #8888a0;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108, 92, 231, 0.3);
+    --green: #00d68f;
+    --red: #ff6b6b;
+    --yellow: #ffd93d;
+    --blue: #4ecdc4;
+    --archaeologist: #d4a574;
+    --skeptic: #ff6b6b;
+    --visionary: #6c5ce7;
+    --scribe: #4ecdc4;
+    --arch-bg: rgba(212, 165, 116, 0.08);
+    --skep-bg: rgba(255, 107, 107, 0.08);
+    --vis-bg: rgba(108, 92, 231, 0.08);
+    --scr-bg: rgba(78, 205, 196, 0.08);
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, system-ui, sans-serif; height: 100vh; overflow: hidden; }
+
+  .mockup-label {
+    position: fixed; top: 12px; right: 12px; padding: 6px 14px;
+    background: var(--accent); color: white; font-size: 11px; font-weight: 700;
+    border-radius: 6px; z-index: 999; letter-spacing: 1px; text-transform: uppercase;
+  }
+
+  /* Top Bar */
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px; border-bottom: 1px solid var(--border);
+    background: rgba(10, 10, 15, 0.95); backdrop-filter: blur(20px);
+  }
+  .top-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .repo-name { font-size: 14px; color: var(--text-muted); }
+  .repo-name span { color: var(--text); font-weight: 600; }
+  .status-pill { padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .status-pill.debating { background: rgba(108, 92, 231, 0.2); color: var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;}50%{opacity:0.6;} }
+
+  .top-center { display: flex; align-items: center; gap: 20px; }
+  .phase-indicator { display: flex; gap: 4px; align-items: center; }
+  .phase-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+  .phase-dot.done { background: var(--green); }
+  .phase-dot.active { background: var(--accent); animation: pulse 1.5s infinite; box-shadow: 0 0 8px var(--accent-glow); }
+  .phase-label { font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+  .round-counter { font-size: 13px; font-weight: 600; color: var(--accent); }
+
+  .top-right { display: flex; align-items: center; gap: 16px; }
+  .elapsed { font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+  .cost-meter {
+    display: flex; align-items: center; gap: 6px; padding: 4px 12px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-family: 'JetBrains Mono', monospace; color: var(--green);
+  }
+  .provider-badges { display: flex; gap: 4px; }
+  .provider-badge {
+    padding: 3px 8px; background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 4px; font-size: 10px; color: var(--text-muted);
+  }
+
+  /* Main Layout */
+  .layout { display: grid; grid-template-columns: 260px 1fr 280px; grid-template-rows: 1fr auto; height: calc(100vh - 49px); }
+
+  /* Agent Panels (left) */
+  .agent-panels { display: flex; flex-direction: column; gap: 1px; border-right: 1px solid var(--border); overflow-y: auto; }
+  .agent-panel {
+    padding: 14px; border-bottom: 1px solid var(--border); position: relative; min-height: 140px;
+  }
+  .agent-panel.speaking { border-left: 3px solid; }
+  .agent-panel.speaking.arch { border-left-color: var(--archaeologist); background: var(--arch-bg); }
+  .agent-panel.speaking.skep { border-left-color: var(--skeptic); background: var(--skep-bg); }
+  .agent-panel.speaking.vis { border-left-color: var(--visionary); background: var(--vis-bg); }
+  .agent-panel.speaking.scr { border-left-color: var(--scribe); background: var(--scr-bg); }
+
+  .agent-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .agent-avatar {
+    width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: white; position: relative;
+  }
+  .agent-avatar.arch { background: var(--archaeologist); }
+  .agent-avatar.skep { background: var(--skeptic); }
+  .agent-avatar.vis { background: var(--visionary); }
+  .agent-avatar.scr { background: var(--scribe); }
+  .agent-avatar .pulse-ring {
+    position: absolute; inset: -4px; border-radius: 12px; border: 2px solid;
+    animation: ring-pulse 2s infinite; opacity: 0;
+  }
+  .speaking .agent-avatar .pulse-ring { opacity: 1; }
+  .arch .pulse-ring { border-color: var(--archaeologist); }
+  .skep .pulse-ring { border-color: var(--skeptic); }
+  .vis .pulse-ring { border-color: var(--visionary); }
+  .scr .pulse-ring { border-color: var(--scribe); }
+  @keyframes ring-pulse { 0%{transform:scale(1);opacity:0.6;}100%{transform:scale(1.3);opacity:0;} }
+
+  .agent-meta { flex: 1; }
+  .agent-name { font-size: 13px; font-weight: 600; }
+  .agent-status-label { font-size: 11px; color: var(--text-muted); }
+  .agent-status-label.active-status { color: var(--accent); font-weight: 500; }
+
+  .agent-stream {
+    font-size: 12px; line-height: 1.6; color: var(--text-muted); max-height: 60px;
+    overflow: hidden; position: relative;
+  }
+  .agent-stream.active-stream { color: var(--text); }
+  .typing-cursor { display: inline-block; width: 2px; height: 14px; background: var(--accent); animation: blink 1s infinite; vertical-align: middle; margin-left: 2px; }
+  @keyframes blink { 0%,50%{opacity:1;}51%,100%{opacity:0;} }
+
+  .finding-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+  .chip {
+    padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+  }
+  .chip.critical { background: rgba(255,107,107,0.2); color: var(--red); }
+  .chip.high { background: rgba(255,217,61,0.2); color: var(--yellow); }
+  .chip.medium { background: rgba(108,92,231,0.2); color: var(--accent); }
+  .chip.info { background: rgba(78,205,196,0.2); color: var(--blue); }
+
+  .mini-vote { display: flex; gap: 4px; margin-top: 8px; }
+  .vote-badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .vote-badge.yes { background: rgba(0,214,143,0.2); color: var(--green); }
+  .vote-badge.no { background: rgba(255,107,107,0.2); color: var(--red); }
+
+  /* Center: Debate Feed */
+  .debate-feed { display: flex; flex-direction: column; overflow-y: auto; padding: 16px; gap: 12px; }
+  .feed-header {
+    display: flex; align-items: center; gap: 12px; padding: 8px 12px; margin-bottom: 4px;
+    background: var(--bg-card); border-radius: 8px; position: sticky; top: 0; z-index: 10;
+  }
+  .feed-search {
+    flex: 1; padding: 6px 12px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text); font-size: 12px; outline: none;
+  }
+  .feed-search::placeholder { color: var(--text-muted); }
+  .filter-btn {
+    padding: 4px 10px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; color: var(--text-muted); font-size: 11px; cursor: pointer;
+  }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); }
+
+  .event-bubble {
+    display: flex; gap: 12px; padding: 12px 16px; border-radius: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); position: relative;
+  }
+  .event-bubble .color-bar { width: 3px; border-radius: 2px; flex-shrink: 0; }
+  .event-bubble .color-bar.arch { background: var(--archaeologist); }
+  .event-bubble .color-bar.skep { background: var(--skeptic); }
+  .event-bubble .color-bar.vis { background: var(--visionary); }
+  .event-bubble .color-bar.scr { background: var(--scribe); }
+  .event-bubble .color-bar.system { background: var(--text-muted); }
+
+  .event-content { flex: 1; }
+  .event-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .event-agent { font-size: 12px; font-weight: 600; }
+  .event-type-badge {
+    padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+  }
+  .event-type-badge.finding { background: rgba(255,107,107,0.15); color: var(--red); }
+  .event-type-badge.challenge { background: rgba(255,107,107,0.25); color: var(--red); }
+  .event-type-badge.proposal { background: rgba(108,92,231,0.2); color: var(--accent); }
+  .event-type-badge.response { background: rgba(78,205,196,0.15); color: var(--blue); }
+  .event-type-badge.revision { background: rgba(255,217,61,0.2); color: var(--yellow); }
+  .event-type-badge.vote { background: rgba(0,214,143,0.15); color: var(--green); }
+  .event-type-badge.system { background: rgba(136,136,160,0.15); color: var(--text-muted); }
+  .event-timestamp { font-size: 10px; color: var(--text-muted); margin-left: auto; font-family: monospace; }
+
+  .event-text { font-size: 13px; line-height: 1.6; color: var(--text); }
+  .event-text .agent-ref { font-weight: 700; }
+  .event-text .agent-ref.arch-ref { color: var(--archaeologist); }
+  .event-text .agent-ref.skep-ref { color: var(--skeptic); }
+  .event-text .agent-ref.vis-ref { color: var(--visionary); }
+
+  .event-bubble.challenge-bubble { background: rgba(255,107,107,0.04); border-color: rgba(255,107,107,0.2); }
+  .event-bubble.proposal-bubble { background: rgba(108,92,231,0.04); border-color: rgba(108,92,231,0.2); }
+  .event-bubble.revision-bubble { background: rgba(255,217,61,0.04); border-color: rgba(255,217,61,0.2); }
+
+  .deadlock-banner {
+    padding: 12px 20px; background: rgba(255,107,107,0.1); border: 1px solid rgba(255,107,107,0.3);
+    border-radius: 10px; text-align: center; font-size: 13px; font-weight: 600; color: var(--red);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+  }
+
+  /* Right Panel: Graph Visualizer */
+  .graph-panel { border-left: 1px solid var(--border); padding: 16px; display: flex; flex-direction: column; }
+  .graph-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .graph-header h3 { font-size: 13px; font-weight: 600; }
+  .collapse-btn { background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); padding: 2px 8px; cursor: pointer; font-size: 11px; }
+
+  .graph-canvas {
+    flex: 1; background: var(--bg-card); border-radius: 10px; border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden;
+  }
+
+  /* Simple node graph visualization */
+  .graph-node {
+    position: absolute; padding: 8px 14px; border-radius: 8px; font-size: 11px; font-weight: 600;
+    border: 2px solid; text-align: center; cursor: pointer; transition: all 0.3s;
+  }
+  .graph-node.completed { opacity: 0.6; }
+  .graph-node.completed::after { content: " \2713"; color: var(--green); }
+  .graph-node.active { box-shadow: 0 0 20px; animation: node-pulse 2s infinite; }
+  @keyframes node-pulse { 0%,100%{box-shadow: 0 0 10px;}50%{box-shadow: 0 0 25px;} }
+  .graph-node.ingest { top: 15%; left: 50%; transform: translateX(-50%); border-color: var(--text-muted); background: rgba(136,136,160,0.1); color: var(--text-muted); }
+  .graph-node.analyse { top: 30%; left: 50%; transform: translateX(-50%); border-color: var(--archaeologist); background: rgba(212,165,116,0.1); color: var(--archaeologist); }
+  .graph-node.opening { top: 45%; left: 50%; transform: translateX(-50%); border-color: var(--blue); background: rgba(78,205,196,0.1); color: var(--blue); }
+  .graph-node.debate { top: 60%; left: 50%; transform: translateX(-50%); border-color: var(--accent); background: rgba(108,92,231,0.1); color: var(--accent); }
+  .graph-node.voting { top: 75%; left: 50%; transform: translateX(-50%); border-color: var(--green); background: rgba(0,214,143,0.1); color: var(--green); }
+  .graph-node.scribing { top: 90%; left: 50%; transform: translateX(-50%); border-color: var(--scribe); background: rgba(78,205,196,0.1); color: var(--scribe); }
+
+  .graph-edge {
+    position: absolute; left: 50%; width: 2px; background: var(--border);
+  }
+  .graph-edge.lit { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+  .graph-edge.done { background: var(--green); opacity: 0.4; }
+  .graph-edge.e1 { top: calc(15% + 30px); height: calc(15% - 30px); }
+  .graph-edge.e2 { top: calc(30% + 30px); height: calc(15% - 30px); }
+  .graph-edge.e3 { top: calc(45% + 30px); height: calc(15% - 30px); }
+  .graph-edge.e4 { top: calc(60% + 30px); height: calc(15% - 30px); }
+  .graph-edge.e5 { top: calc(75% + 30px); height: calc(15% - 30px); }
+
+  /* Bottom: Proposal Tracker */
+  .proposal-tracker {
+    grid-column: 1 / -1; border-top: 1px solid var(--border); padding: 14px 20px;
+    background: var(--bg-card);
+  }
+  .tracker-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .tracker-header h3 { font-size: 13px; font-weight: 600; }
+  .tracker-summary { font-size: 12px; color: var(--text-muted); }
+
+  .proposal-cards { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
+  .proposal-card {
+    min-width: 220px; padding: 12px 16px; border-radius: 10px;
+    background: var(--bg); border: 1px solid var(--border); flex-shrink: 0;
+  }
+  .proposal-card.deadlocked { border-color: var(--red); border-width: 2px; }
+  .proposal-card .p-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .proposal-card .p-id { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+  .proposal-card .p-status {
+    padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+  }
+  .p-status.passed { background: rgba(0,214,143,0.2); color: var(--green); }
+  .p-status.challenged { background: rgba(255,107,107,0.15); color: var(--red); }
+  .p-status.revised { background: rgba(255,217,61,0.2); color: var(--yellow); }
+  .p-status.voting-status { background: rgba(108,92,231,0.2); color: var(--accent); }
+  .p-status.deadlock-status { background: rgba(255,107,107,0.2); color: var(--red); }
+
+  .proposal-card .p-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  .proposal-card .p-author { font-size: 11px; color: var(--text-muted); margin-bottom: 8px; }
+  .proposal-card .p-effort { font-size: 10px; padding: 2px 6px; background: var(--bg-card); border-radius: 3px; color: var(--text-muted); display: inline-block; }
+
+  .vote-tally { display: flex; gap: 6px; margin-top: 8px; }
+  .vote-dot { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+  .vote-dot.yes-dot { background: rgba(0,214,143,0.2); color: var(--green); }
+  .vote-dot.no-dot { background: rgba(255,107,107,0.2); color: var(--red); }
+  .vote-dot.abstain-dot { background: rgba(136,136,160,0.2); color: var(--text-muted); }
+  .vote-dot.pending-dot { background: var(--bg-card); color: var(--text-muted); border: 1px dashed var(--border); }
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP</div>
+
+<!-- Top Bar -->
+<div class="top-bar">
+  <div class="top-left">
+    <div class="logo"><div class="logo-icon">CC</div> CodeCouncil</div>
+    <div class="repo-name"><span>fastapi/fastapi</span></div>
+    <span class="status-pill debating">Debating</span>
+  </div>
+  <div class="top-center">
+    <div class="phase-indicator">
+      <div class="phase-dot done"></div>
+      <div class="phase-dot done"></div>
+      <div class="phase-dot done"></div>
+      <div class="phase-dot active"></div>
+      <div class="phase-dot"></div>
+      <div class="phase-dot"></div>
+      <div class="phase-dot"></div>
+      <div class="phase-dot"></div>
+      <span class="phase-label">INGESTION &rarr; ANALYSIS &rarr; OPENING &rarr; <strong>DEBATE</strong> &rarr; VOTING &rarr; SCRIBING &rarr; REVIEW &rarr; DONE</span>
+    </div>
+    <div class="round-counter">Round 2/3</div>
+  </div>
+  <div class="top-right">
+    <div class="elapsed">04:32</div>
+    <div class="cost-meter">$ $0.28</div>
+    <div class="provider-badges">
+      <span class="provider-badge">GPT-4o</span>
+      <span class="provider-badge">Claude</span>
+    </div>
+  </div>
+</div>
+
+<!-- Main Layout -->
+<div class="layout">
+  <!-- Agent Panels (Left) -->
+  <div class="agent-panels">
+    <div class="agent-panel arch" style="border-left: 3px solid var(--archaeologist); opacity: 0.7;">
+      <div class="agent-header">
+        <div class="agent-avatar arch">AR</div>
+        <div class="agent-meta">
+          <div class="agent-name" style="color:var(--archaeologist);">The Archaeologist</div>
+          <div class="agent-status-label">Done &middot; 8 findings</div>
+        </div>
+      </div>
+      <div class="agent-stream">Bus factor of 1 detected in 12 core modules. Author concentration: 78% of commits from single contributor. TODO accumulation: 43 unresolved across 2+ years.</div>
+      <div class="finding-chips">
+        <span class="chip critical">CRITICAL</span>
+        <span class="chip high">HIGH &times;3</span>
+        <span class="chip medium">MED &times;4</span>
+      </div>
+    </div>
+
+    <div class="agent-panel speaking skep">
+      <div class="agent-header">
+        <div class="agent-avatar skep">SK<div class="pulse-ring"></div></div>
+        <div class="agent-meta">
+          <div class="agent-name" style="color:var(--skeptic);">The Skeptic</div>
+          <div class="agent-status-label active-status">Speaking...</div>
+        </div>
+      </div>
+      <div class="agent-stream active-stream">Visionary, your proposal to extract a bounded context for the dependency injection system ignores the migration cost. There are 847 import paths that would break<span class="typing-cursor"></span></div>
+      <div class="finding-chips">
+        <span class="chip critical">CRITICAL &times;2</span>
+        <span class="chip high">HIGH &times;5</span>
+      </div>
+    </div>
+
+    <div class="agent-panel vis" style="border-left: 3px solid var(--visionary); opacity: 0.8;">
+      <div class="agent-header">
+        <div class="agent-avatar vis">VI</div>
+        <div class="agent-meta">
+          <div class="agent-name" style="color:var(--visionary);">The Visionary</div>
+          <div class="agent-status-label">Listening &middot; 5 proposals</div>
+        </div>
+      </div>
+      <div class="agent-stream">Proposed PROPOSAL-3-v2: Extract DI bounded context with facade layer to minimize import breakage. Estimated effort: L. Breaking change: yes, phased.</div>
+      <div class="mini-vote">
+        <span class="vote-badge yes">P1 YES</span>
+        <span class="vote-badge yes">P2 YES</span>
+      </div>
+    </div>
+
+    <div class="agent-panel scr" style="border-left: 3px solid var(--scribe); opacity: 0.6;">
+      <div class="agent-header">
+        <div class="agent-avatar scr">SC</div>
+        <div class="agent-meta">
+          <div class="agent-name" style="color:var(--scribe);">The Scribe</div>
+          <div class="agent-status-label">Observing &middot; Recording</div>
+        </div>
+      </div>
+      <div class="agent-stream">Documenting: Round 2 exchange between Skeptic and Visionary on PROPOSAL-3. Skeptic challenged migration cost. Visionary revised with facade approach.</div>
+    </div>
+  </div>
+
+  <!-- Debate Feed (Center) -->
+  <div class="debate-feed">
+    <div class="feed-header">
+      <input class="feed-search" placeholder="Search debate events..." />
+      <button class="filter-btn active">All</button>
+      <button class="filter-btn">Findings</button>
+      <button class="filter-btn">Proposals</button>
+      <button class="filter-btn">Challenges</button>
+      <button class="filter-btn">Votes</button>
+    </div>
+
+    <!-- System event -->
+    <div class="event-bubble">
+      <div class="color-bar system"></div>
+      <div class="event-content">
+        <div class="event-header">
+          <span class="event-agent" style="color:var(--text-muted);">System</span>
+          <span class="event-type-badge system">PHASE</span>
+          <span class="event-timestamp">04:01</span>
+        </div>
+        <div class="event-text">Debate phase started. Topology: Adversarial. Max rounds: 3.</div>
+      </div>
+    </div>
+
+    <!-- Visionary proposal -->
+    <div class="event-bubble proposal-bubble">
+      <div class="color-bar vis"></div>
+      <div class="event-content">
+        <div class="event-header">
+          <span class="event-agent" style="color:var(--visionary);">Visionary</span>
+          <span class="event-type-badge proposal">PROPOSAL</span>
+          <span style="font-size:10px;color:var(--text-muted);font-family:monospace;">PROPOSAL-3</span>
+          <span class="event-timestamp">04:08</span>
+        </div>
+        <div class="event-text">
+          <strong>Extract Dependency Injection Bounded Context</strong><br><br>
+          The DI system in <code>fastapi/dependencies/</code> has grown beyond its original scope. I propose extracting it into a self-contained bounded context with explicit public interfaces. This would reduce coupling between routing and dependency resolution from 847 import paths to ~40 facade methods.<br><br>
+          <span class="p-effort">Effort: L</span> &nbsp; <span style="font-size:11px;color:var(--yellow);">Breaking change: phased migration</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skeptic challenge -->
+    <div class="event-bubble challenge-bubble">
+      <div class="color-bar skep"></div>
+      <div class="event-content">
+        <div class="event-header">
+          <span class="event-agent" style="color:var(--skeptic);">Skeptic</span>
+          <span class="event-type-badge challenge">CHALLENGE</span>
+          <span class="event-timestamp">04:12</span>
+        </div>
+        <div class="event-text">
+          <span class="agent-ref vis-ref">Visionary</span>, your estimate of ~40 facade methods is optimistic. My analysis of the import graph shows 847 direct import paths and 2,340 transitive dependencies. The Archaeologist's churn data confirms this area has been rewritten twice in 18 months — each time increasing complexity. What evidence supports a third attempt succeeding?
+        </div>
+      </div>
+    </div>
+
+    <!-- Archaeologist supporting -->
+    <div class="event-bubble">
+      <div class="color-bar arch"></div>
+      <div class="event-content">
+        <div class="event-header">
+          <span class="event-agent" style="color:var(--archaeologist);">Archaeologist</span>
+          <span class="event-type-badge response">EVIDENCE</span>
+          <span class="event-timestamp">04:15</span>
+        </div>
+        <div class="event-text">
+          Confirming <span class="agent-ref skep-ref">Skeptic</span>'s concern. <code>dependencies/utils.py</code> has a churn rate of 73% over 90 days — highest in the codebase. Two previous refactor attempts (commits <code>a3f82d1</code>, <code>e91b4c7</code>) both increased the file's complexity score. The pattern suggests structural issues that surface refactoring alone does not resolve.
+        </div>
+      </div>
+    </div>
+
+    <!-- Visionary revision -->
+    <div class="event-bubble revision-bubble">
+      <div class="color-bar vis"></div>
+      <div class="event-content">
+        <div class="event-header">
+          <span class="event-agent" style="color:var(--visionary);">Visionary</span>
+          <span class="event-type-badge revision">REVISION</span>
+          <span style="font-size:10px;color:var(--text-muted);font-family:monospace;">PROPOSAL-3-v2</span>
+          <span class="event-timestamp">04:18</span>
+        </div>
+        <div class="event-text">
+          <span class="agent-ref skep-ref">Skeptic</span>, your concern about migration cost is valid. I am revising PROPOSAL-3 to add a <strong>facade layer</strong> as a first step — no imports change initially. The facade wraps the existing DI system, and consumers migrate to the facade incrementally over 2-3 releases. Does this resolve your objection?<br><br>
+          <span style="font-size:11px;color:var(--yellow);">Revised: added facade-first migration strategy. Confidence: 0.7</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skeptic's current response (streaming) -->
+    <div class="event-bubble challenge-bubble">
+      <div class="color-bar skep"></div>
+      <div class="event-content">
+        <div class="event-header">
+          <span class="event-agent" style="color:var(--skeptic);">Skeptic</span>
+          <span class="event-type-badge challenge">RESPONSE</span>
+          <span class="event-timestamp">04:22</span>
+        </div>
+        <div class="event-text">
+          <span class="agent-ref vis-ref">Visionary</span>, the facade approach is an improvement. However, I remain concerned about the 847 import paths. A facade without enforced linting rules to prevent new direct imports will degrade within weeks. I will vote YES on PROPOSAL-3-v2 only if the action item includes a lint rule that blocks direct imports to <code>dependencies/</code> internals<span class="typing-cursor"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Graph Visualizer (Right) -->
+  <div class="graph-panel">
+    <div class="graph-header">
+      <h3>Debate Graph</h3>
+      <button class="collapse-btn">&laquo; Collapse</button>
+    </div>
+    <div class="graph-canvas">
+      <div class="graph-edge e1 done"></div>
+      <div class="graph-edge e2 done"></div>
+      <div class="graph-edge e3 done"></div>
+      <div class="graph-edge e4 lit"></div>
+      <div class="graph-edge e5"></div>
+
+      <div class="graph-node ingest completed">INGEST</div>
+      <div class="graph-node analyse completed">ANALYSE</div>
+      <div class="graph-node opening completed">OPENING</div>
+      <div class="graph-node debate active" style="box-shadow: 0 0 20px var(--accent-glow);">DEBATE</div>
+      <div class="graph-node voting">VOTING</div>
+      <div class="graph-node scribing">SCRIBING</div>
+    </div>
+  </div>
+
+  <!-- Proposal Tracker (Bottom) -->
+  <div class="proposal-tracker">
+    <div class="tracker-header">
+      <h3>Proposal Tracker</h3>
+      <div class="tracker-summary">5 proposals &middot; 2 passed &middot; 1 challenged &middot; 1 revised &middot; 1 deadlocked</div>
+    </div>
+    <div class="proposal-cards">
+      <div class="proposal-card">
+        <div class="p-header"><span class="p-id">P-1</span><span class="p-status passed">PASSED</span></div>
+        <div class="p-title">Add Missing Test Coverage for Auth Module</div>
+        <div class="p-author">by Visionary</div>
+        <span class="p-effort">Effort: S</span>
+        <div class="vote-tally">
+          <div class="vote-dot yes-dot">Y</div>
+          <div class="vote-dot yes-dot">Y</div>
+          <div class="vote-dot yes-dot">Y</div>
+        </div>
+      </div>
+
+      <div class="proposal-card">
+        <div class="p-header"><span class="p-id">P-2</span><span class="p-status passed">PASSED</span></div>
+        <div class="p-title">Upgrade Starlette to Fix CVE-2024-XXXX</div>
+        <div class="p-author">by Skeptic</div>
+        <span class="p-effort">Effort: XS</span>
+        <div class="vote-tally">
+          <div class="vote-dot yes-dot">Y</div>
+          <div class="vote-dot yes-dot">Y</div>
+          <div class="vote-dot yes-dot">Y</div>
+        </div>
+      </div>
+
+      <div class="proposal-card" style="border-color: var(--yellow);">
+        <div class="p-header"><span class="p-id">P-3-v2</span><span class="p-status revised">REVISED</span></div>
+        <div class="p-title">Extract DI Bounded Context (Facade)</div>
+        <div class="p-author">by Visionary</div>
+        <span class="p-effort">Effort: L</span>
+        <div class="vote-tally">
+          <div class="vote-dot pending-dot">?</div>
+          <div class="vote-dot pending-dot">?</div>
+          <div class="vote-dot pending-dot">?</div>
+        </div>
+      </div>
+
+      <div class="proposal-card">
+        <div class="p-header"><span class="p-id">P-4</span><span class="p-status challenged">CHALLENGED</span></div>
+        <div class="p-title">Migrate to Pydantic v2 Model Config</div>
+        <div class="p-author">by Visionary</div>
+        <span class="p-effort">Effort: M</span>
+        <div class="vote-tally">
+          <div class="vote-dot pending-dot">?</div>
+          <div class="vote-dot pending-dot">?</div>
+          <div class="vote-dot pending-dot">?</div>
+        </div>
+      </div>
+
+      <div class="proposal-card deadlocked">
+        <div class="p-header"><span class="p-id">P-5</span><span class="p-status deadlock-status">DEADLOCKED</span></div>
+        <div class="p-title">Replace Sync Middleware with ASGI Stack</div>
+        <div class="p-author">by Visionary</div>
+        <span class="p-effort">Effort: XL</span>
+        <div class="vote-tally">
+          <div class="vote-dot yes-dot">Y</div>
+          <div class="vote-dot no-dot">N</div>
+          <div class="vote-dot abstain-dot">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

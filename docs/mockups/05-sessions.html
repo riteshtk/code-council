@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeCouncil — Sessions Page Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f; --bg-card: #12121a; --bg-hover: #1a1a28; --border: #1e1e2e;
+    --text: #e8e8f0; --text-muted: #8888a0; --accent: #6c5ce7;
+    --green: #00d68f; --red: #ff6b6b; --yellow: #ffd93d; --blue: #4ecdc4;
+    --archaeologist: #d4a574; --skeptic: #ff6b6b; --visionary: #6c5ce7; --scribe: #4ecdc4;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+  .mockup-label { position: fixed; top: 12px; right: 12px; padding: 6px 14px; background: var(--accent); color: white; font-size: 11px; font-weight: 700; border-radius: 6px; z-index: 999; letter-spacing: 1px; text-transform: uppercase; }
+
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: rgba(10,10,15,0.95); position: sticky; top: 0; z-index: 100; }
+  .top-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .nav-links { display: flex; gap: 24px; }
+  .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 14px; }
+  .nav-links a.active { color: var(--text); font-weight: 600; }
+
+  .main { max-width: 1200px; margin: 0 auto; padding: 32px; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .page-header h1 { font-size: 24px; font-weight: 700; }
+  .header-actions { display: flex; gap: 8px; }
+  .compare-btn { padding: 8px 16px; background: var(--bg-card); border: 1px solid var(--accent); border-radius: 8px; color: var(--accent); font-size: 13px; font-weight: 600; cursor: pointer; }
+  .compare-btn:hover { background: rgba(108,92,231,0.1); }
+
+  /* Filter Bar */
+  .filter-bar { display: flex; gap: 12px; margin-bottom: 20px; align-items: center; }
+  .search-input { flex: 1; padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; outline: none; }
+  .search-input::placeholder { color: var(--text-muted); }
+  .search-input:focus { border-color: var(--accent); }
+  .filter-select { padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 13px; outline: none; cursor: pointer; }
+  .filter-select option { background: var(--bg-card); }
+
+  /* Sessions Table */
+  .sessions-table { width: 100%; border-collapse: collapse; }
+  .sessions-table th { text-align: left; padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+  .sessions-table td { padding: 14px; border-bottom: 1px solid rgba(30,30,46,0.5); font-size: 13px; }
+  .sessions-table tr { cursor: pointer; transition: background 0.2s; }
+  .sessions-table tbody tr:hover { background: var(--bg-hover); }
+
+  .repo-cell { display: flex; align-items: center; gap: 10px; }
+  .repo-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .repo-name { font-weight: 600; }
+  .repo-org { color: var(--text-muted); font-weight: 400; }
+
+  .agents-cell { display: flex; gap: -4px; }
+  .mini-avatar { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: white; margin-left: -4px; border: 2px solid var(--bg); }
+  .mini-avatar:first-child { margin-left: 0; }
+  .mini-avatar.arch { background: var(--archaeologist); }
+  .mini-avatar.skep { background: var(--skeptic); }
+  .mini-avatar.vis { background: var(--visionary); }
+  .mini-avatar.scr { background: var(--scribe); }
+
+  .consensus-cell { display: flex; align-items: center; gap: 8px; }
+  .consensus-bar { width: 60px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  .consensus-fill { height: 100%; border-radius: 3px; }
+  .consensus-value { font-weight: 600; font-size: 13px; }
+
+  .cost-cell { font-family: 'JetBrains Mono', monospace; color: var(--text-muted); }
+
+  .status-pill { padding: 4px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; display: inline-block; }
+  .status-pill.completed { background: rgba(0,214,143,0.15); color: var(--green); }
+  .status-pill.running { background: rgba(108,92,231,0.15); color: var(--accent); animation: pulse 2s infinite; }
+  .status-pill.failed { background: rgba(255,107,107,0.15); color: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1;}50%{opacity:0.6;} }
+
+  .rfc-link { color: var(--accent); text-decoration: none; font-size: 12px; font-weight: 600; }
+  .rfc-link:hover { text-decoration: underline; }
+
+  .compare-check { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+
+  .date-cell { color: var(--text-muted); }
+  .topology-cell { font-size: 12px; color: var(--text-muted); }
+
+  /* Agent Memory Panel */
+  .memory-section { margin-top: 40px; }
+  .memory-section h2 { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+  .memory-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .memory-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .memory-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .memory-avatar { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; }
+  .memory-name { font-size: 13px; font-weight: 600; }
+  .memory-sessions { font-size: 11px; color: var(--text-muted); }
+  .memory-body { font-size: 12px; line-height: 1.6; color: var(--text-muted); }
+  .memory-item { padding: 6px 0; border-bottom: 1px solid rgba(30,30,46,0.5); }
+  .memory-item:last-child { border-bottom: none; }
+  .memory-clear { margin-top: 8px; padding: 4px 10px; background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text-muted); font-size: 11px; cursor: pointer; }
+  .memory-clear:hover { border-color: var(--red); color: var(--red); }
+
+  /* Pagination */
+  .pagination { display: flex; justify-content: center; gap: 4px; margin-top: 24px; }
+  .page-btn { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted); font-size: 12px; cursor: pointer; }
+  .page-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .page-btn:hover:not(.active) { background: var(--bg-hover); }
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP</div>
+
+<div class="top-bar">
+  <div class="top-left">
+    <div class="logo"><div class="logo-icon">CC</div> CodeCouncil</div>
+    <div class="nav-links">
+      <a href="#">Home</a>
+      <a href="#" class="active">Sessions</a>
+      <a href="#">Config</a>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Council Sessions</h1>
+    <div class="header-actions">
+      <button class="compare-btn">Compare Selected (0)</button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <input class="search-input" placeholder="Search by repository name..." />
+    <select class="filter-select">
+      <option>All Statuses</option>
+      <option>Completed</option>
+      <option>Running</option>
+      <option>Failed</option>
+    </select>
+    <select class="filter-select">
+      <option>All Topologies</option>
+      <option>Adversarial</option>
+      <option>Collaborative</option>
+      <option>Socratic</option>
+    </select>
+    <select class="filter-select">
+      <option>Newest First</option>
+      <option>Oldest First</option>
+      <option>Highest Consensus</option>
+      <option>Most Expensive</option>
+    </select>
+  </div>
+
+  <table class="sessions-table">
+    <thead>
+      <tr>
+        <th style="width:30px;"></th>
+        <th>Repository</th>
+        <th>Date</th>
+        <th>Agents</th>
+        <th>Topology</th>
+        <th>Consensus</th>
+        <th>Cost</th>
+        <th>Status</th>
+        <th>RFC</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><input type="checkbox" class="compare-check" /></td>
+        <td><div class="repo-cell"><div class="repo-icon">F</div><div><div class="repo-name"><span class="repo-org">fastapi/</span>fastapi</div></div></div></td>
+        <td class="date-cell">Mar 20, 2026<br><span style="font-size:11px;">2 min ago</span></td>
+        <td><div class="agents-cell"><div class="mini-avatar arch">AR</div><div class="mini-avatar skep">SK</div><div class="mini-avatar vis">VI</div><div class="mini-avatar scr">SC</div></div></td>
+        <td class="topology-cell">Adversarial</td>
+        <td><div class="consensus-cell"><div class="consensus-bar"><div class="consensus-fill" style="width:75%;background:var(--green);"></div></div><span class="consensus-value">75%</span></div></td>
+        <td class="cost-cell">$0.42</td>
+        <td><span class="status-pill running">Running</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><input type="checkbox" class="compare-check" /></td>
+        <td><div class="repo-cell"><div class="repo-icon">D</div><div><div class="repo-name"><span class="repo-org">django/</span>django</div></div></div></td>
+        <td class="date-cell">Mar 20, 2026<br><span style="font-size:11px;">1 hour ago</span></td>
+        <td><div class="agents-cell"><div class="mini-avatar arch">AR</div><div class="mini-avatar skep">SK</div><div class="mini-avatar vis">VI</div><div class="mini-avatar scr">SC</div></div></td>
+        <td class="topology-cell">Adversarial</td>
+        <td><div class="consensus-cell"><div class="consensus-bar"><div class="consensus-fill" style="width:92%;background:var(--green);"></div></div><span class="consensus-value">92%</span></div></td>
+        <td class="cost-cell">$0.38</td>
+        <td><span class="status-pill completed">Completed</span></td>
+        <td><a href="#" class="rfc-link">View RFC</a></td>
+      </tr>
+      <tr>
+        <td><input type="checkbox" class="compare-check" /></td>
+        <td><div class="repo-cell"><div class="repo-icon">F</div><div><div class="repo-name"><span class="repo-org">pallets/</span>flask</div></div></div></td>
+        <td class="date-cell">Mar 20, 2026<br><span style="font-size:11px;">3 hours ago</span></td>
+        <td><div class="agents-cell"><div class="mini-avatar arch">AR</div><div class="mini-avatar skep">SK</div><div class="mini-avatar vis">VI</div><div class="mini-avatar scr">SC</div></div></td>
+        <td class="topology-cell">Collaborative</td>
+        <td><div class="consensus-cell"><div class="consensus-bar"><div class="consensus-fill" style="width:60%;background:var(--yellow);"></div></div><span class="consensus-value">60%</span></div></td>
+        <td class="cost-cell">$0.51</td>
+        <td><span class="status-pill completed">Completed</span></td>
+        <td><a href="#" class="rfc-link">View RFC</a></td>
+      </tr>
+      <tr>
+        <td><input type="checkbox" class="compare-check" /></td>
+        <td><div class="repo-cell"><div class="repo-icon">L</div><div><div class="repo-name"><span class="repo-org">torvalds/</span>linux</div></div></div></td>
+        <td class="date-cell">Mar 19, 2026<br><span style="font-size:11px;">Yesterday</span></td>
+        <td><div class="agents-cell"><div class="mini-avatar arch">AR</div><div class="mini-avatar skep">SK</div><div class="mini-avatar vis">VI</div><div class="mini-avatar scr">SC</div></div></td>
+        <td class="topology-cell">Adversarial</td>
+        <td><div class="consensus-cell"><div class="consensus-bar"><div class="consensus-fill" style="width:85%;background:var(--green);"></div></div><span class="consensus-value">85%</span></div></td>
+        <td class="cost-cell">$1.20</td>
+        <td><span class="status-pill completed">Completed</span></td>
+        <td><a href="#" class="rfc-link">View RFC</a></td>
+      </tr>
+      <tr>
+        <td><input type="checkbox" class="compare-check" /></td>
+        <td><div class="repo-cell"><div class="repo-icon">N</div><div><div class="repo-name"><span class="repo-org">vercel/</span>next.js</div></div></div></td>
+        <td class="date-cell">Mar 19, 2026<br><span style="font-size:11px;">Yesterday</span></td>
+        <td><div class="agents-cell"><div class="mini-avatar arch">AR</div><div class="mini-avatar vis">VI</div><div class="mini-avatar scr">SC</div></div></td>
+        <td class="topology-cell">Socratic</td>
+        <td><div class="consensus-cell"><div class="consensus-bar"><div class="consensus-fill" style="width:0%;"></div></div><span class="consensus-value">—</span></div></td>
+        <td class="cost-cell">$0.03</td>
+        <td><span class="status-pill failed">Failed</span></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td><input type="checkbox" class="compare-check" /></td>
+        <td><div class="repo-cell"><div class="repo-icon">R</div><div><div class="repo-name"><span class="repo-org">tiangolo/</span>sqlmodel</div></div></div></td>
+        <td class="date-cell">Mar 18, 2026</td>
+        <td><div class="agents-cell"><div class="mini-avatar arch">AR</div><div class="mini-avatar skep">SK</div><div class="mini-avatar vis">VI</div><div class="mini-avatar scr">SC</div></div></td>
+        <td class="topology-cell">Adversarial</td>
+        <td><div class="consensus-cell"><div class="consensus-bar"><div class="consensus-fill" style="width:78%;background:var(--green);"></div></div><span class="consensus-value">78%</span></div></td>
+        <td class="cost-cell">$0.29</td>
+        <td><span class="status-pill completed">Completed</span></td>
+        <td><a href="#" class="rfc-link">View RFC</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <button class="page-btn active">1</button>
+    <button class="page-btn">2</button>
+    <button class="page-btn">3</button>
+    <button class="page-btn">&rarr;</button>
+  </div>
+
+  <!-- Agent Memory Section -->
+  <div class="memory-section">
+    <h2>Agent Memory</h2>
+    <div class="memory-grid">
+      <div class="memory-card">
+        <div class="memory-header">
+          <div class="memory-avatar" style="background:var(--archaeologist);">AR</div>
+          <div>
+            <div class="memory-name">Archaeologist</div>
+            <div class="memory-sessions">6 sessions &middot; 847 tokens</div>
+          </div>
+        </div>
+        <div class="memory-body">
+          <div class="memory-item">High churn pattern in DI modules seen in 3/6 repos — correlates with single-author concentration</div>
+          <div class="memory-item">Python repos average 2.3x higher TODO accumulation than Go repos</div>
+          <div class="memory-item">Bus factor &lt; 2 found in 4/6 repos analysed</div>
+        </div>
+        <button class="memory-clear">Clear Memory</button>
+      </div>
+
+      <div class="memory-card">
+        <div class="memory-header">
+          <div class="memory-avatar" style="background:var(--skeptic);">SK</div>
+          <div>
+            <div class="memory-name">Skeptic</div>
+            <div class="memory-sessions">6 sessions &middot; 920 tokens</div>
+          </div>
+        </div>
+        <div class="memory-body">
+          <div class="memory-item">Visionary's refactor proposals have been overscoped in 4/6 sessions. Front-loading import graph data pre-empts this.</div>
+          <div class="memory-item">CVE scan has found actionable issues in 3/6 repos — high signal rate</div>
+          <div class="memory-item">Deadlock invoked twice, both justified by historical rewrite failure evidence</div>
+        </div>
+        <button class="memory-clear">Clear Memory</button>
+      </div>
+
+      <div class="memory-card">
+        <div class="memory-header">
+          <div class="memory-avatar" style="background:var(--visionary);">VI</div>
+          <div>
+            <div class="memory-name">Visionary</div>
+            <div class="memory-sessions">6 sessions &middot; 780 tokens</div>
+          </div>
+        </div>
+        <div class="memory-body">
+          <div class="memory-item">Skeptic has overruled 4 proposals. Must front-load evidence and scope conservatively to pre-empt objections.</div>
+          <div class="memory-item">Facade-first migration pattern accepted in 2/3 cases — prefer this over big-bang refactors</div>
+        </div>
+        <button class="memory-clear">Clear Memory</button>
+      </div>
+
+      <div class="memory-card">
+        <div class="memory-header">
+          <div class="memory-avatar" style="background:var(--scribe);">SC</div>
+          <div>
+            <div class="memory-name">Scribe</div>
+            <div class="memory-sessions">6 sessions &middot; 540 tokens</div>
+          </div>
+        </div>
+        <div class="memory-body">
+          <div class="memory-item">Executive summaries averaging 120 words — within target range</div>
+          <div class="memory-item">Dissent preservation rate: 100% — all minority positions documented</div>
+        </div>
+        <button class="memory-clear">Clear Memory</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

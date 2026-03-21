@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeCouncil — RFC Viewer Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f; --bg-card: #12121a; --bg-hover: #1a1a28; --border: #1e1e2e;
+    --text: #e8e8f0; --text-muted: #8888a0; --accent: #6c5ce7;
+    --green: #00d68f; --red: #ff6b6b; --yellow: #ffd93d; --blue: #4ecdc4;
+    --archaeologist: #d4a574; --skeptic: #ff6b6b; --visionary: #6c5ce7; --scribe: #4ecdc4;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+  .mockup-label { position: fixed; top: 12px; right: 12px; padding: 6px 14px; background: var(--accent); color: white; font-size: 11px; font-weight: 700; border-radius: 6px; z-index: 999; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* Top Bar */
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: rgba(10,10,15,0.95); position: sticky; top: 0; z-index: 100; }
+  .top-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .breadcrumb { font-size: 13px; color: var(--text-muted); }
+  .breadcrumb a { color: var(--text-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--text); }
+  .breadcrumb span { color: var(--text); }
+  .top-actions { display: flex; gap: 8px; }
+  .action-btn { padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-muted); transition: all 0.2s; }
+  .action-btn:hover { border-color: var(--accent); color: var(--text); }
+  .action-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* Layout */
+  .rfc-layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 49px); }
+
+  /* Sidebar */
+  .sidebar { border-right: 1px solid var(--border); padding: 20px 16px; position: sticky; top: 49px; height: calc(100vh - 49px); overflow-y: auto; }
+  .sidebar h4 { font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px; margin-bottom: 12px; }
+  .sidebar-link { display: block; padding: 6px 12px; margin-bottom: 2px; border-radius: 6px; font-size: 13px; color: var(--text-muted); text-decoration: none; cursor: pointer; transition: all 0.2s; }
+  .sidebar-link:hover { background: var(--bg-hover); color: var(--text); }
+  .sidebar-link.active { background: rgba(108,92,231,0.1); color: var(--accent); font-weight: 600; border-left: 2px solid var(--accent); }
+  .sidebar-link .indent { padding-left: 16px; }
+
+  /* Content */
+  .rfc-content { max-width: 860px; margin: 0 auto; padding: 40px 48px 80px; }
+
+  /* RFC Header */
+  .rfc-header { margin-bottom: 40px; padding-bottom: 32px; border-bottom: 1px solid var(--border); }
+  .rfc-title { font-size: 32px; font-weight: 700; margin-bottom: 8px; line-height: 1.3; }
+  .rfc-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 16px; font-size: 13px; color: var(--text-muted); }
+  .rfc-meta .meta-item { display: flex; align-items: center; gap: 6px; }
+  .consensus-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 700; }
+  .consensus-badge.high { background: rgba(0,214,143,0.15); color: var(--green); }
+  .agents-row { display: flex; gap: 8px; margin-top: 12px; }
+  .agent-chip { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--border); font-size: 12px; }
+  .agent-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Sections */
+  .rfc-section { margin-bottom: 36px; }
+  .rfc-section h2 { font-size: 20px; font-weight: 700; margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .rfc-section h3 { font-size: 16px; font-weight: 600; margin: 20px 0 10px; }
+
+  /* Executive Summary */
+  .exec-summary { padding: 20px 24px; background: var(--bg-card); border-left: 4px solid var(--accent); border-radius: 0 10px 10px 0; font-size: 15px; line-height: 1.7; color: var(--text); margin-bottom: 24px; }
+
+  /* Finding Cards */
+  .finding-card { padding: 16px 20px; border-radius: 10px; background: var(--bg-card); border: 1px solid var(--border); margin-bottom: 12px; }
+  .finding-card.critical { border-left: 4px solid var(--red); }
+  .finding-card.high { border-left: 4px solid var(--yellow); }
+  .finding-card.medium { border-left: 4px solid var(--accent); }
+  .finding-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .severity-badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+  .severity-badge.crit { background: rgba(255,107,107,0.2); color: var(--red); }
+  .severity-badge.high-sev { background: rgba(255,217,61,0.2); color: var(--yellow); }
+  .severity-badge.med { background: rgba(108,92,231,0.2); color: var(--accent); }
+  .finding-agent { font-size: 11px; color: var(--text-muted); }
+  .finding-text { font-size: 14px; line-height: 1.6; }
+  .finding-implication { font-size: 13px; color: var(--text-muted); margin-top: 8px; font-style: italic; }
+
+  /* Proposal with Vote Matrix */
+  .proposal-section { padding: 20px 24px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 16px; }
+  .proposal-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .proposal-title { font-size: 16px; font-weight: 700; }
+  .proposal-effort { padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; background: rgba(108,92,231,0.15); color: var(--accent); }
+  .proposal-body { font-size: 14px; line-height: 1.7; margin-bottom: 16px; color: var(--text); }
+
+  /* Vote Matrix */
+  .vote-matrix { display: flex; gap: 12px; margin-bottom: 12px; }
+  .vote-cell { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 16px; border-radius: 8px; background: var(--bg); min-width: 90px; }
+  .vote-cell .cell-agent { font-size: 11px; font-weight: 600; }
+  .vote-cell .cell-vote { font-size: 16px; font-weight: 800; }
+  .vote-cell.yes-cell .cell-vote { color: var(--green); }
+  .vote-cell.no-cell .cell-vote { color: var(--red); }
+  .vote-cell .cell-conf { font-size: 10px; color: var(--text-muted); }
+
+  .proposal-result { display: inline-block; padding: 4px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+  .proposal-result.passed { background: rgba(0,214,143,0.15); color: var(--green); }
+  .proposal-result.failed { background: rgba(255,107,107,0.15); color: var(--red); }
+  .proposal-result.deadlocked { background: rgba(255,107,107,0.2); color: var(--red); }
+
+  /* Dissent Block */
+  .dissent-block { padding: 14px 18px; background: rgba(255,217,61,0.06); border: 1px solid rgba(255,217,61,0.2); border-radius: 8px; margin-top: 12px; }
+  .dissent-header { font-size: 12px; font-weight: 700; color: var(--yellow); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .dissent-text { font-size: 13px; line-height: 1.6; color: var(--text); font-style: italic; }
+
+  /* Deadlocked Item */
+  .deadlock-section { padding: 20px 24px; background: rgba(255,107,107,0.04); border: 2px solid rgba(255,107,107,0.3); border-radius: 10px; margin-bottom: 16px; }
+  .deadlock-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; background: rgba(255,107,107,0.15); color: var(--red); border-radius: 6px; font-size: 11px; font-weight: 700; margin-bottom: 12px; }
+  .positions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .position { padding: 14px; background: var(--bg); border-radius: 8px; }
+  .position-header { font-size: 12px; font-weight: 700; margin-bottom: 6px; }
+  .position-header.for { color: var(--green); }
+  .position-header.against { color: var(--red); }
+  .position-text { font-size: 13px; line-height: 1.6; }
+
+  /* Action Items */
+  .action-item { display: flex; gap: 12px; padding: 14px 18px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; align-items: flex-start; }
+  .action-number { width: 28px; height: 28px; border-radius: 6px; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .action-body { flex: 1; }
+  .action-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .action-meta { display: flex; gap: 8px; }
+  .action-tag { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+  .action-tag.effort-s { background: rgba(0,214,143,0.15); color: var(--green); }
+  .action-tag.effort-m { background: rgba(255,217,61,0.15); color: var(--yellow); }
+  .action-tag.effort-l { background: rgba(255,107,107,0.15); color: var(--red); }
+  .action-tag.breaking { background: rgba(255,107,107,0.2); color: var(--red); }
+
+  /* Cost Summary */
+  .cost-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .cost-table th { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .cost-table td { padding: 8px 12px; border-bottom: 1px solid rgba(30,30,46,0.5); }
+  .cost-table .agent-col { display: flex; align-items: center; gap: 8px; }
+  .cost-table .total-row { font-weight: 700; border-top: 2px solid var(--border); }
+  .cost-table .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Debate Appendix */
+  .appendix-toggle { padding: 10px 16px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 13px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; }
+  .appendix-content { padding: 16px; background: var(--bg-card); border: 1px solid var(--border); border-top: none; border-radius: 0 0 8px 8px; font-size: 13px; line-height: 1.6; font-family: monospace; }
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP</div>
+
+<div class="top-bar">
+  <div class="top-left">
+    <div class="logo"><div class="logo-icon">CC</div> CodeCouncil</div>
+    <div class="breadcrumb"><a href="#">Sessions</a> / <a href="#">fastapi/fastapi</a> / <span>RFC</span></div>
+  </div>
+  <div class="top-actions">
+    <button class="action-btn">Export MD</button>
+    <button class="action-btn">Export JSON</button>
+    <button class="action-btn">Export HTML</button>
+    <button class="action-btn">Share Link</button>
+    <button class="action-btn primary">Re-analyse</button>
+  </div>
+</div>
+
+<div class="rfc-layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <h4>Sections</h4>
+    <a class="sidebar-link active">Header</a>
+    <a class="sidebar-link">Executive Summary</a>
+    <a class="sidebar-link">Critical Findings</a>
+    <a class="sidebar-link">Proposals &amp; Votes</a>
+    <a class="sidebar-link indent">P-1: Auth Test Coverage</a>
+    <a class="sidebar-link indent">P-2: Starlette CVE</a>
+    <a class="sidebar-link indent">P-3: DI Bounded Context</a>
+    <a class="sidebar-link">Deadlocked Items</a>
+    <a class="sidebar-link">Action Items</a>
+    <a class="sidebar-link">Human Review Notes</a>
+    <a class="sidebar-link">Debate Appendix</a>
+    <a class="sidebar-link">Cost Summary</a>
+  </div>
+
+  <!-- RFC Content -->
+  <div class="rfc-content">
+    <!-- Header -->
+    <div class="rfc-header">
+      <div class="rfc-title">RFC: fastapi/fastapi Codebase Analysis</div>
+      <div class="rfc-meta">
+        <span class="meta-item">March 20, 2026</span>
+        <span class="meta-item">Run #47</span>
+        <span class="meta-item">Topology: Adversarial</span>
+        <span class="meta-item">3 rounds</span>
+        <span class="meta-item">Total cost: $0.42</span>
+      </div>
+      <span class="consensus-badge high">Consensus: 82%</span>
+      <div class="agents-row">
+        <span class="agent-chip"><span class="agent-dot" style="background:var(--archaeologist);"></span> Archaeologist (GPT-4o)</span>
+        <span class="agent-chip"><span class="agent-dot" style="background:var(--skeptic);"></span> Skeptic (GPT-4o)</span>
+        <span class="agent-chip"><span class="agent-dot" style="background:var(--visionary);"></span> Visionary (Claude Sonnet)</span>
+        <span class="agent-chip"><span class="agent-dot" style="background:var(--scribe);"></span> Scribe (GPT-4o)</span>
+      </div>
+    </div>
+
+    <!-- Executive Summary -->
+    <div class="rfc-section">
+      <h2>Executive Summary</h2>
+      <div class="exec-summary">
+        FastAPI is a mature, well-structured framework with strong community adoption. However, the council identified <strong>2 critical findings</strong> related to bus factor concentration and an unpatched CVE in Starlette. The dependency injection subsystem shows signs of architectural strain — high churn, repeated rewrites, and growing complexity. Of 5 proposals, 4 passed and 1 deadlocked on the question of sync middleware replacement. The council recommends immediate action on the CVE patch and test coverage gaps, with a phased approach to the DI refactor.
+      </div>
+    </div>
+
+    <!-- Critical Findings -->
+    <div class="rfc-section">
+      <h2>Critical Findings</h2>
+      <div class="finding-card critical">
+        <div class="finding-header">
+          <span class="severity-badge crit">CRITICAL</span>
+          <span class="finding-agent" style="color:var(--archaeologist);">Archaeologist</span>
+        </div>
+        <div class="finding-text"><strong>Bus factor of 1 in 12 core modules.</strong> 78% of commits to <code>routing/</code>, <code>dependencies/</code>, and <code>security/</code> come from a single contributor. No co-maintainers have write history in these areas.</div>
+        <div class="finding-implication">Implication: A single departure would leave critical subsystems without institutional knowledge.</div>
+      </div>
+      <div class="finding-card critical">
+        <div class="finding-header">
+          <span class="severity-badge crit">CRITICAL</span>
+          <span class="finding-agent" style="color:var(--skeptic);">Skeptic</span>
+        </div>
+        <div class="finding-text"><strong>CVE-2024-XXXX in Starlette 0.36.x.</strong> The pinned Starlette version has a known path traversal vulnerability. The fix is available in 0.37.2+.</div>
+        <div class="finding-implication">Implication: Any deployment serving static files is exposed. Upgrade is non-breaking.</div>
+      </div>
+      <div class="finding-card high">
+        <div class="finding-header">
+          <span class="severity-badge high-sev">HIGH</span>
+          <span class="finding-agent" style="color:var(--archaeologist);">Archaeologist</span>
+        </div>
+        <div class="finding-text"><strong>43 unresolved TODOs aged 2+ years.</strong> The oldest dates to 2021. 12 reference features that were never implemented. 8 mark known bugs with no linked issues.</div>
+        <div class="finding-implication">Implication: Accumulated technical promises erode developer trust and make triage harder.</div>
+      </div>
+    </div>
+
+    <!-- Proposals with Votes -->
+    <div class="rfc-section">
+      <h2>Proposals &amp; Votes</h2>
+
+      <div class="proposal-section">
+        <div class="proposal-title-row">
+          <div class="proposal-title">P-3-v2: Extract DI Bounded Context (Facade-First)</div>
+          <span class="proposal-effort">Effort: L</span>
+        </div>
+        <div class="proposal-body">
+          Extract the dependency injection system into a self-contained bounded context, starting with a facade layer that wraps existing internals. Consumers migrate to the facade incrementally over 2-3 releases. A lint rule blocks new direct imports to <code>dependencies/</code> internals.
+        </div>
+        <div class="vote-matrix">
+          <div class="vote-cell yes-cell">
+            <span class="cell-agent" style="color:var(--archaeologist);">Archaeologist</span>
+            <span class="cell-vote">YES</span>
+            <span class="cell-conf">Confidence: 0.6</span>
+          </div>
+          <div class="vote-cell yes-cell">
+            <span class="cell-agent" style="color:var(--skeptic);">Skeptic</span>
+            <span class="cell-vote">YES</span>
+            <span class="cell-conf">Confidence: 0.7</span>
+          </div>
+          <div class="vote-cell yes-cell">
+            <span class="cell-agent" style="color:var(--visionary);">Visionary</span>
+            <span class="cell-vote">YES</span>
+            <span class="cell-conf">Confidence: 0.8</span>
+          </div>
+        </div>
+        <span class="proposal-result passed">PASSED (3-0)</span>
+
+        <div class="dissent-block">
+          <div class="dissent-header">Preserved Dissent — Skeptic</div>
+          <div class="dissent-text">"I vote yes conditionally. Without the lint rule enforcing facade-only access, this refactor will degrade within weeks. My vote flips to no if the lint rule is dropped from the action items."</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deadlocked Items -->
+    <div class="rfc-section">
+      <h2>Deadlocked Items</h2>
+      <div class="deadlock-section">
+        <div class="deadlock-badge">DEADLOCKED</div>
+        <div class="proposal-title" style="margin-bottom: 12px;">P-5: Replace Sync Middleware with ASGI Stack</div>
+        <div class="positions">
+          <div class="position">
+            <div class="position-header for">FOR — Visionary</div>
+            <div class="position-text">"The sync middleware layer is a performance ceiling. ASGI-native middleware would unlock 3-5x throughput on IO-bound routes and align with the framework's async-first philosophy."</div>
+          </div>
+          <div class="position">
+            <div class="position-header against">AGAINST — Skeptic</div>
+            <div class="position-text">"The blast radius is too large. Every middleware consumer — including third-party packages — would need migration. Historical evidence shows two prior attempts at middleware refactors both introduced regressions."</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Items -->
+    <div class="rfc-section">
+      <h2>Action Items</h2>
+      <div class="action-item">
+        <div class="action-number">1</div>
+        <div class="action-body">
+          <div class="action-title">Upgrade Starlette to 0.37.2+ to patch CVE-2024-XXXX</div>
+          <div class="action-meta">
+            <span class="action-tag effort-s">Effort: XS</span>
+            <span class="action-tag" style="background:rgba(108,92,231,0.15);color:var(--accent);">From: P-2</span>
+          </div>
+        </div>
+      </div>
+      <div class="action-item">
+        <div class="action-number">2</div>
+        <div class="action-body">
+          <div class="action-title">Add integration tests for auth module (currently 0% coverage)</div>
+          <div class="action-meta">
+            <span class="action-tag effort-s">Effort: S</span>
+            <span class="action-tag" style="background:rgba(108,92,231,0.15);color:var(--accent);">From: P-1</span>
+          </div>
+        </div>
+      </div>
+      <div class="action-item">
+        <div class="action-number">3</div>
+        <div class="action-body">
+          <div class="action-title">Create facade layer for dependencies/ with lint rule blocking direct imports</div>
+          <div class="action-meta">
+            <span class="action-tag effort-l">Effort: L</span>
+            <span class="action-tag breaking">Breaking Change (phased)</span>
+            <span class="action-tag" style="background:rgba(108,92,231,0.15);color:var(--accent);">From: P-3-v2</span>
+          </div>
+        </div>
+      </div>
+      <div class="action-item">
+        <div class="action-number">4</div>
+        <div class="action-body">
+          <div class="action-title">Triage and resolve 43 stale TODOs (assign owners, create issues or delete)</div>
+          <div class="action-meta">
+            <span class="action-tag effort-m">Effort: M</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cost Summary -->
+    <div class="rfc-section">
+      <h2>Cost Summary</h2>
+      <table class="cost-table">
+        <thead>
+          <tr><th>Agent</th><th>Provider</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>Cost</th><th>Latency</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="agent-col"><span class="agent-dot" style="background:var(--archaeologist);"></span> Archaeologist</span></td>
+            <td>OpenAI</td><td class="mono">gpt-4o</td><td class="mono">18,420</td><td class="mono">3,210</td><td class="mono">$0.09</td><td class="mono">12.4s</td>
+          </tr>
+          <tr>
+            <td><span class="agent-col"><span class="agent-dot" style="background:var(--skeptic);"></span> Skeptic</span></td>
+            <td>OpenAI</td><td class="mono">gpt-4o</td><td class="mono">22,100</td><td class="mono">4,830</td><td class="mono">$0.12</td><td class="mono">18.2s</td>
+          </tr>
+          <tr>
+            <td><span class="agent-col"><span class="agent-dot" style="background:var(--visionary);"></span> Visionary</span></td>
+            <td>Anthropic</td><td class="mono">claude-sonnet</td><td class="mono">19,800</td><td class="mono">5,120</td><td class="mono">$0.14</td><td class="mono">15.8s</td>
+          </tr>
+          <tr>
+            <td><span class="agent-col"><span class="agent-dot" style="background:var(--scribe);"></span> Scribe</span></td>
+            <td>OpenAI</td><td class="mono">gpt-4o</td><td class="mono">24,600</td><td class="mono">6,450</td><td class="mono">$0.07</td><td class="mono">22.1s</td>
+          </tr>
+          <tr class="total-row">
+            <td colspan="3">Total</td><td class="mono">84,920</td><td class="mono">19,610</td><td class="mono">$0.42</td><td class="mono">4m 32s</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Debate Appendix -->
+    <div class="rfc-section">
+      <h2>Debate Appendix</h2>
+      <div class="appendix-toggle">
+        <span>View full debate transcript (28 exchanges)</span>
+        <span>&#9660;</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

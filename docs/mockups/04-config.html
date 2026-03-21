@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CodeCouncil — Config Page Mockup</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a0a0f; --bg-card: #12121a; --bg-hover: #1a1a28; --bg-input: #0e0e16;
+    --border: #1e1e2e; --text: #e8e8f0; --text-muted: #8888a0; --accent: #6c5ce7;
+    --accent-glow: rgba(108,92,231,0.3); --green: #00d68f; --red: #ff6b6b;
+    --yellow: #ffd93d; --blue: #4ecdc4;
+    --archaeologist: #d4a574; --skeptic: #ff6b6b; --visionary: #6c5ce7; --scribe: #4ecdc4;
+  }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+  .mockup-label { position: fixed; top: 12px; right: 12px; padding: 6px 14px; background: var(--accent); color: white; font-size: 11px; font-weight: 700; border-radius: 6px; z-index: 999; letter-spacing: 1px; text-transform: uppercase; }
+
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-bottom: 1px solid var(--border); background: rgba(10,10,15,0.95); position: sticky; top: 0; z-index: 100; }
+  .top-left { display: flex; align-items: center; gap: 16px; }
+  .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: var(--accent); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .nav-links { display: flex; gap: 24px; }
+  .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 14px; }
+  .nav-links a.active { color: var(--text); font-weight: 600; }
+
+  .config-layout { max-width: 1000px; margin: 0 auto; padding: 32px; }
+  .config-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+  .config-header h1 { font-size: 24px; font-weight: 700; }
+  .save-row { display: flex; gap: 8px; align-items: center; }
+  .save-btn { padding: 8px 20px; background: var(--accent); border: none; border-radius: 8px; color: white; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .save-btn:hover { background: #5a4bd4; }
+  .next-run-check { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .next-run-check input { accent-color: var(--accent); }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 2px; margin-bottom: 24px; background: var(--bg-card); border-radius: 10px; padding: 4px; border: 1px solid var(--border); }
+  .tab { padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-muted); cursor: pointer; transition: all 0.2s; }
+  .tab.active { background: var(--accent); color: white; }
+  .tab:hover:not(.active) { background: var(--bg-hover); color: var(--text); }
+
+  /* Tab Content: Agents */
+  .agents-grid { display: flex; flex-direction: column; gap: 16px; }
+  .agent-config-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .agent-card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+  .agent-card-left { display: flex; align-items: center; gap: 12px; }
+  .agent-avatar { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: white; }
+  .agent-avatar.arch { background: var(--archaeologist); }
+  .agent-avatar.skep { background: var(--skeptic); }
+  .agent-avatar.vis { background: var(--visionary); }
+  .agent-avatar.scr { background: var(--scribe); }
+  .agent-card-name { font-size: 15px; font-weight: 600; }
+  .agent-card-role { font-size: 12px; color: var(--text-muted); }
+  .toggle-switch { width: 44px; height: 24px; background: var(--border); border-radius: 12px; position: relative; cursor: pointer; transition: background 0.2s; }
+  .toggle-switch.on { background: var(--green); }
+  .toggle-knob { width: 20px; height: 20px; background: white; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: left 0.2s; }
+  .toggle-switch.on .toggle-knob { left: 22px; }
+
+  .agent-card-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+  .field-label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.5px; }
+  .field-input { padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; outline: none; transition: border 0.2s; }
+  .field-input:focus { border-color: var(--accent); }
+  .field-select { padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 13px; outline: none; cursor: pointer; }
+  .field-select option { background: var(--bg-card); }
+
+  .slider-row { display: flex; align-items: center; gap: 12px; }
+  .slider { flex: 1; accent-color: var(--accent); }
+  .slider-value { font-size: 13px; font-family: monospace; color: var(--accent); min-width: 36px; }
+
+  .focus-areas { grid-column: 1 / -1; }
+  .focus-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .focus-chip { padding: 5px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 12px; color: var(--text-muted); cursor: pointer; transition: all 0.2s; }
+  .focus-chip.active { background: rgba(108,92,231,0.15); border-color: var(--accent); color: var(--accent); }
+
+  .persona-section { grid-column: 1 / -1; }
+  .persona-editor { width: 100%; min-height: 80px; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; color: var(--text); font-size: 12px; font-family: monospace; line-height: 1.6; resize: vertical; outline: none; }
+  .persona-editor:focus { border-color: var(--accent); }
+
+  /* Provider Tab Preview */
+  .provider-grid { display: flex; flex-direction: column; gap: 12px; }
+  .provider-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; }
+  .provider-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .provider-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .provider-status { font-size: 12px; display: flex; align-items: center; gap: 6px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+  .status-dot.ok { background: var(--green); }
+  .status-dot.err { background: var(--red); }
+  .provider-fields { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: end; }
+  .test-btn { padding: 8px 16px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 12px; cursor: pointer; font-weight: 600; height: 36px; }
+  .test-btn:hover { border-color: var(--accent); color: var(--text); }
+
+  /* Validation */
+  .validation-msg { font-size: 11px; margin-top: 4px; }
+  .validation-msg.error { color: var(--red); }
+  .validation-msg.success { color: var(--green); }
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP</div>
+
+<div class="top-bar">
+  <div class="top-left">
+    <div class="logo"><div class="logo-icon">CC</div> CodeCouncil</div>
+    <div class="nav-links">
+      <a href="#">Home</a>
+      <a href="#">Sessions</a>
+      <a href="#" class="active">Config</a>
+    </div>
+  </div>
+</div>
+
+<div class="config-layout">
+  <div class="config-header">
+    <h1>Configuration</h1>
+    <div class="save-row">
+      <label class="next-run-check"><input type="checkbox" /> Apply only to next run</label>
+      <button class="save-btn">Save Configuration</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">General</div>
+    <div class="tab">Providers</div>
+    <div class="tab active">Agents</div>
+    <div class="tab">Ingestion</div>
+    <div class="tab">Output</div>
+  </div>
+
+  <!-- Agents Tab -->
+  <div class="agents-grid">
+    <!-- Skeptic Agent (expanded) -->
+    <div class="agent-config-card">
+      <div class="agent-card-header">
+        <div class="agent-card-left">
+          <div class="agent-avatar skep">SK</div>
+          <div>
+            <div class="agent-card-name">The Skeptic</div>
+            <div class="agent-card-role">Risk Analyst &middot; Challenger</div>
+          </div>
+        </div>
+        <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+      </div>
+      <div class="agent-card-body">
+        <div class="field-group">
+          <span class="field-label">Provider</span>
+          <select class="field-select">
+            <option>Default (OpenAI)</option>
+            <option selected>OpenAI</option>
+            <option>Anthropic</option>
+            <option>Google</option>
+            <option>Mistral</option>
+            <option>Ollama</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <span class="field-label">Model</span>
+          <select class="field-select">
+            <option selected>gpt-4o</option>
+            <option>gpt-4o-mini</option>
+            <option>gpt-4-turbo</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <span class="field-label">Temperature</span>
+          <div class="slider-row">
+            <input type="range" class="slider" min="0" max="100" value="20" />
+            <span class="slider-value">0.2</span>
+          </div>
+        </div>
+        <div class="field-group">
+          <span class="field-label">Max Tokens</span>
+          <input class="field-input" type="number" value="2000" />
+        </div>
+        <div class="field-group">
+          <span class="field-label">Vote Weight</span>
+          <div class="slider-row">
+            <input type="range" class="slider" min="0" max="200" value="100" />
+            <span class="slider-value">1.0</span>
+          </div>
+        </div>
+        <div class="field-group">
+          <span class="field-label">Persona</span>
+          <select class="field-select">
+            <option selected>Default</option>
+            <option>Custom...</option>
+          </select>
+        </div>
+
+        <div class="focus-areas">
+          <span class="field-label">Focus Areas</span>
+          <div class="focus-grid">
+            <span class="focus-chip active">Security Surface</span>
+            <span class="focus-chip active">Coupling Analysis</span>
+            <span class="focus-chip active">CVE Scan</span>
+            <span class="focus-chip active">Test Coverage</span>
+            <span class="focus-chip active">API Contracts</span>
+            <span class="focus-chip active">Performance</span>
+            <span class="focus-chip active">Hidden Deps</span>
+            <span class="focus-chip active">Blast Radius</span>
+          </div>
+        </div>
+
+        <div class="persona-section">
+          <span class="field-label">Persona Prompt</span>
+          <textarea class="persona-editor">You are the Skeptic — the council's risk analyst and challenger. You are clipped, direct, and precise. You name agents when challenging them. You follow implications to where others stop. You never partially concede. You can declare DEADLOCK on any proposal with evidence. You vote no with explicit rationale. You concede only when fully convinced.</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Archaeologist (collapsed preview) -->
+    <div class="agent-config-card">
+      <div class="agent-card-header">
+        <div class="agent-card-left">
+          <div class="agent-avatar arch">AR</div>
+          <div>
+            <div class="agent-card-name">The Archaeologist</div>
+            <div class="agent-card-role">Historian &middot; Evidence Collector &middot; OpenAI GPT-4o &middot; temp 0.3</div>
+          </div>
+        </div>
+        <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+      </div>
+    </div>
+
+    <!-- Visionary (collapsed) -->
+    <div class="agent-config-card">
+      <div class="agent-card-header">
+        <div class="agent-card-left">
+          <div class="agent-avatar vis">VI</div>
+          <div>
+            <div class="agent-card-name">The Visionary</div>
+            <div class="agent-card-role">Proposer &middot; Domain Reader &middot; Anthropic Claude Sonnet &middot; temp 0.7</div>
+          </div>
+        </div>
+        <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+      </div>
+    </div>
+
+    <!-- Scribe (collapsed) -->
+    <div class="agent-config-card">
+      <div class="agent-card-header">
+        <div class="agent-card-left">
+          <div class="agent-avatar scr">SC</div>
+          <div>
+            <div class="agent-card-name">The Scribe</div>
+            <div class="agent-card-role">Secretary &middot; RFC Author &middot; OpenAI GPT-4o &middot; temp 0.1</div>
+          </div>
+        </div>
+        <div class="toggle-switch on"><div class="toggle-knob"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
