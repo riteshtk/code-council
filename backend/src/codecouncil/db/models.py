@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Uuid as SaUuid
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -14,6 +14,10 @@ class Base(DeclarativeBase):
 
 class RunModel(Base):
     __tablename__ = "runs"
+    __table_args__ = (
+        Index("ix_runs_status", "status"),
+        Index("ix_runs_repo", "repo_url"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(SaUuid, primary_key=True, default=uuid.uuid4)
     repo_url: Mapped[str] = mapped_column(String, nullable=False)
@@ -31,6 +35,11 @@ class RunModel(Base):
 
 class EventModel(Base):
     __tablename__ = "events"
+    __table_args__ = (
+        Index("ix_events_run_sequence", "run_id", "sequence"),
+        Index("ix_events_run_type", "run_id", "event_type"),
+        Index("ix_events_run_agent", "run_id", "agent"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(SaUuid, primary_key=True, default=uuid.uuid4)
     run_id: Mapped[uuid.UUID] = mapped_column(SaUuid, ForeignKey("runs.id"), nullable=False)
@@ -55,6 +64,10 @@ class EventModel(Base):
 
 class FindingModel(Base):
     __tablename__ = "findings"
+    __table_args__ = (
+        Index("ix_findings_run", "run_id"),
+        Index("ix_findings_severity", "severity"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(SaUuid, primary_key=True, default=uuid.uuid4)
     run_id: Mapped[uuid.UUID] = mapped_column(SaUuid, ForeignKey("runs.id"), nullable=False)
@@ -68,6 +81,9 @@ class FindingModel(Base):
 
 class ProposalModel(Base):
     __tablename__ = "proposals"
+    __table_args__ = (
+        Index("ix_proposals_run", "run_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(SaUuid, primary_key=True, default=uuid.uuid4)
     run_id: Mapped[uuid.UUID] = mapped_column(SaUuid, ForeignKey("runs.id"), nullable=False)
@@ -84,6 +100,10 @@ class ProposalModel(Base):
 
 class VoteModel(Base):
     __tablename__ = "votes"
+    __table_args__ = (
+        Index("ix_votes_run", "run_id"),
+        Index("ix_votes_proposal", "proposal_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(SaUuid, primary_key=True, default=uuid.uuid4)
     run_id: Mapped[uuid.UUID] = mapped_column(SaUuid, ForeignKey("runs.id"), nullable=False)
@@ -108,6 +128,9 @@ class SessionModel(Base):
 
 class AgentMemoryModel(Base):
     __tablename__ = "agent_memories"
+    __table_args__ = (
+        Index("ix_memories_agent", "agent_handle"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(SaUuid, primary_key=True, default=uuid.uuid4)
     agent_handle: Mapped[str] = mapped_column(String, nullable=False)
