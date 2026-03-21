@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
 
-from codecouncil.api.simulation import simulate_council_run
+from codecouncil.api.pipeline import run_real_council
 
 router = APIRouter(tags=["runs"])
 
@@ -88,8 +88,8 @@ async def create_run(request: CreateRunRequest) -> dict:
         "updated_at": now,
     }
     _runs[run_id] = run
-    # Launch simulation as background task
-    asyncio.create_task(simulate_council_run(run, _runs))
+    # Launch real pipeline as background task
+    asyncio.create_task(run_real_council(run, _runs))
     return _normalize_run(run)
 
 
@@ -232,5 +232,5 @@ async def rerun(run_id: str) -> dict:
         "rerun_of": run_id,
     }
     _runs[new_run_id] = new_run
-    asyncio.create_task(simulate_council_run(new_run, _runs))
+    asyncio.create_task(run_real_council(new_run, _runs))
     return _normalize_run(new_run)
