@@ -419,6 +419,11 @@ button[data-slot="button"][data-variant="ghost"]:hover {
   0%, 100% { box-shadow: 0 0 10px rgba(108,92,231,0.3); }
   50% { box-shadow: 0 0 25px rgba(108,92,231,0.5); }
 }
+@keyframes edge-flow {
+  0% { transform: translateY(-10px); opacity: 0; }
+  50% { opacity: 1; }
+  100% { transform: translateY(10px); opacity: 0; }
+}
 
 /* ═══════════════════════════════════════════
    Markdown prose styles for agent content

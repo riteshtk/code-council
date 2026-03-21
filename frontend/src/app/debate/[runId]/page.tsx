@@ -352,7 +352,7 @@ export default function DebatePage() {
         >
           <GraphVisualizer
             currentPhase={phase}
-            completedPhases={completedPhases}
+            events={events}
           />
         </div>
 
