@@ -1,1 +1,1 @@
-""
+"""Ingestion analyzers package."""

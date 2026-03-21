@@ -72,6 +72,7 @@ class Dependency(BaseModel):
     latest_version: str = ""
     is_outdated: bool = False
     is_abandoned: bool = False
+    ecosystem: str = ""
 
 
 class CVEResult(BaseModel):
