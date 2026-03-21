@@ -103,6 +103,33 @@ async def _update_run_phase(session_factory, run_id: str, status: str, phase: st
         logging.getLogger("codecouncil.pipeline").warning("DB persist failed: %s", exc)
 
 
+async def llm_call(
+    client: AsyncOpenAI,
+    system_prompt: str,
+    user_prompt: str,
+    model: str,
+    max_tokens: int,
+    temperature: float = 0.3,
+) -> tuple[str, int, int]:
+    """Make an LLM call with separate system and user messages.
+
+    Returns (text, input_tokens, output_tokens).
+    """
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+        **_model_kwargs(model, max_tokens),
+        temperature=temperature,
+    )
+    text = response.choices[0].message.content or ""
+    tokens_in = response.usage.prompt_tokens if response.usage else 0
+    tokens_out = response.usage.completion_tokens if response.usage else 0
+    return text, tokens_in, tokens_out
+
+
 async def run_real_council(run: dict, runs_store: dict, *, session_factory=None, agent_registry=None) -> None:
     """Run a REAL council analysis on a GitHub repository."""
     run_id = run["run_id"]
@@ -298,213 +325,82 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None,
             await _update_run_phase(session_factory, run_id, "running", "analysing")
         emit("system", "phase_started", "Analysis phase: agents running in parallel", "analysing")
 
-        # Determine analysts — registry-driven or fallback to hardcoded
-        use_registry = agent_registry is not None
-        if use_registry:
-            analysts = agent_registry.list_analysts()
-        else:
-            analysts = None
+        # Agent registry is required — no fallback to hardcoded prompts
+        if not agent_registry:
+            raise RuntimeError("Agent registry is required — cannot run without agent definitions")
 
-        if use_registry and analysts:
-            # ── Registry-driven analysis ──
-            async def _run_agent_analysis_registry(agent_def):
-                agent_name = agent_def.handle
-                emit(agent_name, "agent_thinking", f"{agent_name.capitalize()} analyzing repository...", "analysing")
-                try:
-                    prompt = agent_def.build_system_prompt()
-                    analysis_prompt = agent_def.get_prompt("analyze", repo_context=full_context)
-                    if analysis_prompt:
-                        prompt += "\n\n" + analysis_prompt
+        analysts = agent_registry.list_analysts()
 
-                    response = await client.chat.completions.create(
-                        model=MODEL_HEAVY,
-                        messages=[{"role": "system", "content": prompt}],
-                        **_model_kwargs(MODEL_HEAVY, agent_def.max_tokens),
-                        temperature=agent_def.temperature,
-                    )
-                    text = response.choices[0].message.content or ""
-                    tokens_in = response.usage.prompt_tokens if response.usage else 0
-                    tokens_out = response.usage.completion_tokens if response.usage else 0
-                    cost = round((tokens_in * 2.5 + tokens_out * 10) / 1_000_000, 4)
-
-                    emit(
-                        agent_name, "agent_response", text, "analysing",
-                        metadata={
-                            "provider": "openai", "model": MODEL_HEAVY,
-                            "input_tokens": tokens_in, "output_tokens": tokens_out,
-                            "cost_usd": cost,
-                        },
-                    )
-
-                    # Parse findings
-                    findings: list[dict] = []
-                    for match in re.finditer(
-                        r'\[FINDING:\s*(CRITICAL|HIGH|MEDIUM|INFO)\]\s*(.*?)(?=\[FINDING:|$)',
-                        text, re.DOTALL,
-                    ):
-                        severity = match.group(1).lower()
-                        raw = match.group(2).strip()
-                        parts = raw.split("Implication:", 1)
-                        finding = {
-                            "id": str(uuid.uuid4()),
-                            "run_id": run_id,
-                            "agent": agent_name,
-                            "agent_id": agent_name,
-                            "severity": severity,
-                            "title": parts[0].strip()[:200],
-                            "content": parts[0].strip(),
-                            "description": parts[0].strip(),
-                            "implication": parts[1].strip() if len(parts) > 1 else "",
-                            "scope": "repository",
-                            "phase": "analysis",
-                            "tags": [],
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                        findings.append(finding)
-                        emit(
-                            agent_name, "finding_emitted",
-                            f"[{severity.upper()}] {parts[0].strip()}",
-                            "analysing", structured=finding,
-                        )
-
-                    return findings, text
-                except Exception as e:
-                    emit(agent_name, "agent_response", f"Analysis error: {e!s:.200}", "analysing")
+        async def _run_agent_analysis(agent_def):
+            agent_name = agent_def.handle
+            emit(agent_name, "agent_thinking", f"{agent_name.capitalize()} analyzing repository...", "analysing")
+            try:
+                system = agent_def.build_system_prompt(memory_context="")
+                user = agent_def.get_prompt("analyze", repo_context=full_context)
+                if not user:
+                    emit(agent_name, "agent_response", "No analyze prompt configured", "analysing")
                     return [], ""
 
-            results = await asyncio.gather(
-                *[_run_agent_analysis_registry(ad) for ad in analysts]
-            )
+                text, tokens_in, tokens_out = await llm_call(
+                    client, system, user, MODEL_HEAVY,
+                    agent_def.max_tokens, agent_def.temperature,
+                )
+                cost = round((tokens_in * 2.5 + tokens_out * 10) / 1_000_000, 4)
 
-            all_findings: list[dict] = []
-            agent_analyses: dict[str, str] = {}
-            for (findings, analysis_text), agent_def in zip(results, analysts):
-                all_findings.extend(findings)
-                agent_analyses[agent_def.handle] = analysis_text
-        else:
-            # ── Fallback: hardcoded prompts (backwards compatibility) ──
-            agent_prompts = {
-                "archaeologist": (
-                    "You are the Archaeologist -- the council's historian and evidence collector. "
-                    "You are declarative, data-first, and speak in facts.\n\n"
-                    "Analyze this repository and produce findings. Focus on:\n"
-                    "- Bus factor (author concentration)\n"
-                    "- Code churn and stability\n"
-                    "- TODO/FIXME accumulation\n"
-                    "- File age and commit patterns\n"
-                    "- Dead code indicators\n\n"
-                    "For each finding, use this format:\n"
-                    "[FINDING:CRITICAL|HIGH|MEDIUM|INFO] <description>\n"
-                    "Implication: <why this matters>\n\n"
-                    f"Repository context:\n{full_context}"
-                ),
-                "skeptic": (
-                    "You are the Skeptic -- the council's risk analyst and challenger. "
-                    "You are clipped, direct, and precise.\n\n"
-                    "Analyze this repository for risks. Focus on:\n"
-                    "- Security surface and vulnerabilities\n"
-                    "- Test coverage gaps\n"
-                    "- Dependency risks\n"
-                    "- API contract issues\n"
-                    "- Performance anti-patterns\n"
-                    "- Hidden dependencies\n\n"
-                    "For each finding, use this format:\n"
-                    "[FINDING:CRITICAL|HIGH|MEDIUM|INFO] <description>\n"
-                    "Implication: <why this matters>\n\n"
-                    f"Repository context:\n{full_context}"
-                ),
-                "visionary": (
-                    "You are the Visionary -- the council's proposal author and architecture reader. "
-                    "You are constructive but not naive.\n\n"
-                    "Analyze this repository and identify improvement opportunities. Focus on:\n"
-                    "- Architecture patterns and evolution paths\n"
-                    "- Refactoring opportunities\n"
-                    "- Module boundary clarification\n"
-                    "- Design pattern improvements\n"
-                    "- Bounded context identification\n\n"
-                    "For each finding, use this format:\n"
-                    "[FINDING:MEDIUM|INFO] <description>\n"
-                    "Implication: <opportunity>\n\n"
-                    f"Repository context:\n{full_context}"
-                ),
-            }
+                emit(
+                    agent_name, "agent_response", text, "analysing",
+                    metadata={
+                        "provider": "openai", "model": MODEL_HEAVY,
+                        "input_tokens": tokens_in, "output_tokens": tokens_out,
+                        "cost_usd": cost,
+                    },
+                )
 
-            _temperatures = {"archaeologist": 0.3, "skeptic": 0.2, "visionary": 0.5}
-
-            async def _run_agent_analysis(
-                agent_name: str, prompt: str,
-            ) -> tuple[list[dict], str]:
-                emit(agent_name, "agent_thinking", f"{agent_name.capitalize()} analyzing repository...", "analysing")
-                try:
-                    response = await client.chat.completions.create(
-                        model=MODEL_HEAVY,
-                        messages=[{"role": "system", "content": prompt}],
-                        **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_ANALYSIS),
-                        temperature=_temperatures.get(agent_name, 0.3),
-                    )
-                    text = response.choices[0].message.content or ""
-                    tokens_in = response.usage.prompt_tokens if response.usage else 0
-                    tokens_out = response.usage.completion_tokens if response.usage else 0
-                    cost = round((tokens_in * 2.5 + tokens_out * 10) / 1_000_000, 4)
-
+                # Parse findings
+                findings: list[dict] = []
+                for match in re.finditer(
+                    r'\[FINDING:\s*(CRITICAL|HIGH|MEDIUM|INFO)\]\s*(.*?)(?=\[FINDING:|$)',
+                    text, re.DOTALL,
+                ):
+                    severity = match.group(1).lower()
+                    raw = match.group(2).strip()
+                    parts = raw.split("Implication:", 1)
+                    finding = {
+                        "id": str(uuid.uuid4()),
+                        "run_id": run_id,
+                        "agent": agent_name,
+                        "agent_id": agent_name,
+                        "severity": severity,
+                        "title": parts[0].strip()[:200],
+                        "content": parts[0].strip(),
+                        "description": parts[0].strip(),
+                        "implication": parts[1].strip() if len(parts) > 1 else "",
+                        "scope": "repository",
+                        "phase": "analysis",
+                        "tags": [],
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    findings.append(finding)
                     emit(
-                        agent_name, "agent_response", text, "analysing",
-                        metadata={
-                            "provider": "openai", "model": MODEL_HEAVY,
-                            "input_tokens": tokens_in, "output_tokens": tokens_out,
-                            "cost_usd": cost,
-                        },
+                        agent_name, "finding_emitted",
+                        f"[{severity.upper()}] {parts[0].strip()}",
+                        "analysing", structured=finding,
                     )
 
-                    # Parse findings
-                    findings: list[dict] = []
-                    for match in re.finditer(
-                        r'\[FINDING:\s*(CRITICAL|HIGH|MEDIUM|INFO)\]\s*(.*?)(?=\[FINDING:|$)',
-                        text, re.DOTALL,
-                    ):
-                        severity = match.group(1).lower()
-                        raw = match.group(2).strip()
-                        parts = raw.split("Implication:", 1)
-                        finding = {
-                            "id": str(uuid.uuid4()),
-                            "run_id": run_id,
-                            "agent": agent_name,
-                            "agent_id": agent_name,
-                            "severity": severity,
-                            "title": parts[0].strip()[:200],
-                            "content": parts[0].strip(),
-                            "description": parts[0].strip(),
-                            "implication": parts[1].strip() if len(parts) > 1 else "",
-                            "scope": "repository",
-                            "phase": "analysis",
-                            "tags": [],
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                        findings.append(finding)
-                        emit(
-                            agent_name, "finding_emitted",
-                            f"[{severity.upper()}] {parts[0].strip()}",
-                            "analysing", structured=finding,
-                        )
+                return findings, text
+            except Exception as e:
+                emit(agent_name, "agent_response", f"Analysis error: {e!s:.200}", "analysing")
+                return [], ""
 
-                    return findings, text
-                except Exception as e:
-                    emit(agent_name, "agent_response", f"Analysis error: {e!s:.200}", "analysing")
-                    return [], ""
+        results = await asyncio.gather(
+            *[_run_agent_analysis(ad) for ad in analysts]
+        )
 
-            results = await asyncio.gather(
-                _run_agent_analysis("archaeologist", agent_prompts["archaeologist"]),
-                _run_agent_analysis("skeptic", agent_prompts["skeptic"]),
-                _run_agent_analysis("visionary", agent_prompts["visionary"]),
-            )
-
-            all_findings: list[dict] = []
-            agent_analyses: dict[str, str] = {}
-            for (findings, analysis_text), agent_name in zip(
-                results, ["archaeologist", "skeptic", "visionary"]
-            ):
-                all_findings.extend(findings)
-                agent_analyses[agent_name] = analysis_text
+        all_findings: list[dict] = []
+        agent_analyses: dict[str, str] = {}
+        for (findings, analysis_text), agent_def in zip(results, analysts):
+            all_findings.extend(findings)
+            agent_analyses[agent_def.handle] = analysis_text
 
         run["findings"] = all_findings
         emit("system", "phase_completed", f"Analysis complete: {len(all_findings)} findings", "analysing")
@@ -545,46 +441,27 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None,
         )
 
         # Determine proposer/challenger
-        proposer = agent_registry.get_proposer() if use_registry else None
-        challenger = agent_registry.get_challenger() if use_registry else None
+        proposer = agent_registry.get_proposer()
+        challenger = agent_registry.get_challenger()
 
-        if use_registry and proposer:
-            proposal_prompt = proposer.get_prompt(
-                "debate_propose",
-                repo_name=f"{repo_org}/{repo_name}",
-                findings_summary=findings_summary,
-                archaeologist_analysis=agent_analyses.get("archaeologist", ""),
-                skeptic_analysis=agent_analyses.get("skeptic", ""),
-            )
-            proposal_prompt = proposer.build_system_prompt() + "\n\n" + proposal_prompt
-            proposal_temp = proposer.temperature
-        else:
-            proposal_prompt = (
-                f"You are the Visionary. Based on these findings from the council analysis "
-                f"of {repo_org}/{repo_name}:\n\n{findings_summary}\n\n"
-                f"Archaeologist's analysis:\n{agent_analyses.get('archaeologist', '')}\n\n"
-                f"Skeptic's analysis:\n{agent_analyses.get('skeptic', '')}\n\n"
-                "Propose 2-4 concrete improvements. For each, use this format:\n"
-                "[PROPOSAL]\nTitle: <short title>\nGoal: <one sentence goal>\n"
-                "Effort: <XS|S|M|L|XL>\nBreaking: <yes|no>\n"
-                "Description: <2-3 sentences explaining the proposal>\n\n"
-                "Be specific and actionable. Reference actual files/patterns from the codebase."
-            )
-            proposal_temp = 0.6
-
-        proposal_response = await client.chat.completions.create(
-            model=MODEL_HEAVY,
-            messages=[{"role": "system", "content": proposal_prompt}],
-            **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-            temperature=proposal_temp,
+        proposal_system = proposer.build_system_prompt(memory_context="")
+        proposal_user = proposer.get_prompt(
+            "debate_propose",
+            repo_name=f"{repo_org}/{repo_name}",
+            findings_summary=findings_summary,
+            archaeologist_analysis=agent_analyses.get("archaeologist", ""),
+            skeptic_analysis=agent_analyses.get("skeptic", ""),
         )
-        proposal_text = proposal_response.choices[0].message.content or ""
+
+        proposal_text, prop_in, prop_out = await llm_call(
+            client, proposal_system, proposal_user,
+            MODEL_HEAVY, MAX_TOKENS_DEBATE, proposer.temperature,
+        )
         emit(
             "visionary", "agent_response", proposal_text, "debate",
             metadata={
                 "provider": "openai", "model": MODEL_HEAVY,
-                "input_tokens": proposal_response.usage.prompt_tokens if proposal_response.usage else 0,
-                "output_tokens": proposal_response.usage.completion_tokens if proposal_response.usage else 0,
+                "input_tokens": prop_in, "output_tokens": prop_out,
             },
         )
 
@@ -667,111 +544,55 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None,
                 [f"P-{p['proposal_number']}: {p['title']} (status: {p['status']})" for p in proposals]
             )
 
-            if use_registry and challenger:
-                if round_num == 1:
-                    challenge_prompt = challenger.get_prompt(
-                        "debate_challenge",
-                        repo_name=f"{repo_org}/{repo_name}",
-                        proposal_text=proposal_text,
-                    )
-                else:
-                    challenge_prompt = challenger.get_prompt(
-                        "debate_followup",
-                        round_number=str(round_num),
-                        repo_name=f"{repo_org}/{repo_name}",
-                        visionary_text=visionary_response_text,
-                        evidence_text=evidence_text,
-                        proposal_status_text=proposal_status_text,
-                    )
-                challenge_prompt = challenger.build_system_prompt() + "\n\n" + challenge_prompt
-                challenger_temp = challenger.temperature
+            challenge_system = challenger.build_system_prompt(memory_context="")
+            if round_num == 1:
+                challenge_user = challenger.get_prompt(
+                    "debate_challenge",
+                    repo_name=f"{repo_org}/{repo_name}",
+                    proposal_text=proposal_text,
+                )
             else:
-                if round_num == 1:
-                    challenge_prompt = (
-                        f"You are the Skeptic — clipped, direct, precise. "
-                        f"The Visionary has proposed these changes for {repo_org}/{repo_name}:\n\n"
-                        f"{proposal_text}\n\n"
-                        "Challenge each proposal. Address the Visionary by name. For each proposal:\n"
-                        "1. State your position (support/oppose)\n"
-                        "2. Name specific risks and costs\n"
-                        "3. Suggest conditions under which you'd change your position\n\n"
-                        "Be thorough but concise."
-                    )
-                else:
-                    challenge_prompt = (
-                        f"You are the Skeptic. This is round {round_num} of the debate on {repo_org}/{repo_name}.\n\n"
-                        f"Visionary's latest response:\n{visionary_response_text}\n\n"
-                        f"Archaeologist's evidence:\n{evidence_text}\n\n"
-                        f"Current proposals:\n" +
-                        proposal_status_text +
-                        "\n\nHave your concerns been addressed? Update your positions. "
-                        "If convinced, concede explicitly. If not, explain what's still missing. "
-                        "You may declare DEADLOCK on any proposal where agreement is impossible."
-                    )
-                challenger_temp = 0.2
+                challenge_user = challenger.get_prompt(
+                    "debate_followup",
+                    round_number=str(round_num),
+                    repo_name=f"{repo_org}/{repo_name}",
+                    visionary_text=visionary_response_text,
+                    evidence_text=evidence_text,
+                    proposal_status_text=proposal_status_text,
+                )
 
-            challenge_response = await client.chat.completions.create(
-                model=MODEL_HEAVY,
-                messages=[{"role": "system", "content": challenge_prompt}],
-                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-                temperature=challenger_temp,
+            challenge_text, ch_in, ch_out = await llm_call(
+                client, challenge_system, challenge_user,
+                MODEL_HEAVY, MAX_TOKENS_DEBATE, challenger.temperature,
             )
-            challenge_text = challenge_response.choices[0].message.content or ""
             emit("skeptic", "agent_speaking", challenge_text, "debate",
                  metadata={"provider": "openai", "model": MODEL_HEAVY,
-                           "input_tokens": challenge_response.usage.prompt_tokens if challenge_response.usage else 0,
-                           "output_tokens": challenge_response.usage.completion_tokens if challenge_response.usage else 0})
+                           "input_tokens": ch_in, "output_tokens": ch_out})
 
             # ── Visionary responds to challenges ──
-            if use_registry and proposer:
-                if round_num == 1:
-                    visionary_defend_prompt = proposer.get_prompt(
-                        "debate_defend",
-                        repo_name=f"{repo_org}/{repo_name}",
-                        challenge_text=challenge_text,
-                    )
-                else:
-                    visionary_defend_prompt = proposer.get_prompt(
-                        "debate_defend_followup",
-                        round_number=str(round_num),
-                        repo_name=f"{repo_org}/{repo_name}",
-                        challenge_text=challenge_text,
-                        evidence_text=evidence_text,
-                    )
-                visionary_defend_prompt = proposer.build_system_prompt() + "\n\n" + visionary_defend_prompt
-                proposer_temp = proposer.temperature
+            defend_system = proposer.build_system_prompt(memory_context="")
+            if round_num == 1:
+                defend_user = proposer.get_prompt(
+                    "debate_defend",
+                    repo_name=f"{repo_org}/{repo_name}",
+                    challenge_text=challenge_text,
+                )
             else:
-                if round_num == 1:
-                    visionary_defend_prompt = (
-                        f"You are the Visionary. The Skeptic has challenged your proposals for {repo_org}/{repo_name}:\n\n"
-                        f"Skeptic's challenges:\n{challenge_text}\n\n"
-                        "Respond to each challenge. You may:\n"
-                        "- Defend your proposal with reasoning\n"
-                        "- Revise the proposal to address concerns (mark as [REVISED])\n"
-                        "- Withdraw a proposal if evidence is overwhelming (mark as [WITHDRAWN])\n\n"
-                        "Address the Skeptic by name. Be constructive."
-                    )
-                else:
-                    visionary_defend_prompt = (
-                        f"You are the Visionary. Round {round_num} of debate on {repo_org}/{repo_name}.\n\n"
-                        f"Skeptic's latest:\n{challenge_text}\n\n"
-                        f"Archaeologist's evidence:\n{evidence_text}\n\n"
-                        "Respond. Have the Skeptic's remaining concerns been addressed by your revisions? "
-                        "Final round — make your closing argument for each proposal."
-                    )
-                proposer_temp = 0.5
+                defend_user = proposer.get_prompt(
+                    "debate_defend_followup",
+                    round_number=str(round_num),
+                    repo_name=f"{repo_org}/{repo_name}",
+                    challenge_text=challenge_text,
+                    evidence_text=evidence_text,
+                )
 
-            visionary_defend = await client.chat.completions.create(
-                model=MODEL_HEAVY,
-                messages=[{"role": "system", "content": visionary_defend_prompt}],
-                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-                temperature=proposer_temp,
+            visionary_response_text, def_in, def_out = await llm_call(
+                client, defend_system, defend_user,
+                MODEL_HEAVY, MAX_TOKENS_DEBATE, proposer.temperature,
             )
-            visionary_response_text = visionary_defend.choices[0].message.content or ""
             emit("visionary", "agent_speaking", visionary_response_text, "debate",
                  metadata={"provider": "openai", "model": MODEL_HEAVY,
-                           "input_tokens": visionary_defend.usage.prompt_tokens if visionary_defend.usage else 0,
-                           "output_tokens": visionary_defend.usage.completion_tokens if visionary_defend.usage else 0})
+                           "input_tokens": def_in, "output_tokens": def_out})
 
             # Check for revised/withdrawn proposals
             for p in proposals:
@@ -791,62 +612,35 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None,
                 {"agent": "visionary", "action": "respond", "content": visionary_response_text},
             ]
 
-            if use_registry:
-                # Each analyst that has a debate_evidence prompt provides evidence
-                # (proposer and challenger already spoke above, but they may still
-                #  have an evidence prompt — more commonly, only the archaeologist does)
-                skip_handles = set()
-                if proposer:
-                    skip_handles.add(proposer.handle)
-                if challenger:
-                    skip_handles.add(challenger.handle)
+            # Each analyst that has a debate_evidence prompt provides evidence
+            skip_handles = set()
+            if proposer:
+                skip_handles.add(proposer.handle)
+            if challenger:
+                skip_handles.add(challenger.handle)
 
-                for agent_def in analysts:
-                    if agent_def.handle in skip_handles:
-                        continue
-                    evidence_prompt_text = agent_def.get_prompt(
-                        "debate_evidence",
-                        round_number=str(round_num),
-                        repo_name=f"{repo_org}/{repo_name}",
-                        visionary_text=visionary_response_text,
-                        challenge_text=challenge_text,
-                    )
-                    if not evidence_prompt_text:
-                        continue
-                    evidence_prompt_full = agent_def.build_system_prompt() + "\n\n" + evidence_prompt_text
-                    evidence_response = await client.chat.completions.create(
-                        model=MODEL_HEAVY,
-                        messages=[{"role": "system", "content": evidence_prompt_full}],
-                        **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-                        temperature=agent_def.temperature,
-                    )
-                    evidence_text = evidence_response.choices[0].message.content or ""
-                    emit(agent_def.handle, "agent_speaking", evidence_text, "debate",
-                         metadata={"provider": "openai", "model": MODEL_HEAVY,
-                                   "input_tokens": evidence_response.usage.prompt_tokens if evidence_response.usage else 0,
-                                   "output_tokens": evidence_response.usage.completion_tokens if evidence_response.usage else 0})
-                    round_turns.append({"agent": agent_def.handle, "action": "evidence", "content": evidence_text})
-            else:
-                # Fallback: Archaeologist provides evidence
-                evidence_prompt = (
-                    f"You are the Archaeologist. Round {round_num} of debate on {repo_org}/{repo_name}.\n\n"
-                    f"Visionary's position:\n{visionary_response_text}\n"
-                    f"Skeptic's challenges:\n{challenge_text}\n\n"
-                    "Provide factual evidence from commit history and file patterns. "
-                    "State which side the data supports for each proposal. Be neutral and data-driven."
+            for agent_def in analysts:
+                if agent_def.handle in skip_handles:
+                    continue
+                evidence_user = agent_def.get_prompt(
+                    "debate_evidence",
+                    round_number=str(round_num),
+                    max_rounds=str(max_rounds),
+                    repo_name=f"{repo_org}/{repo_name}",
+                    visionary_text=visionary_response_text,
+                    challenge_text=challenge_text,
                 )
-                evidence_response = await client.chat.completions.create(
-                    model=MODEL_HEAVY,
-                    messages=[{"role": "system", "content": evidence_prompt}],
-                    **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-                    temperature=0.3,
+                if not evidence_user:
+                    continue
+                evidence_system = agent_def.build_system_prompt(memory_context="")
+                evidence_text, ev_in, ev_out = await llm_call(
+                    client, evidence_system, evidence_user,
+                    MODEL_HEAVY, MAX_TOKENS_DEBATE, agent_def.temperature,
                 )
-                evidence_text = evidence_response.choices[0].message.content or ""
-                emit("archaeologist", "agent_speaking", evidence_text, "debate",
+                emit(agent_def.handle, "agent_speaking", evidence_text, "debate",
                      metadata={"provider": "openai", "model": MODEL_HEAVY,
-                               "input_tokens": evidence_response.usage.prompt_tokens if evidence_response.usage else 0,
-                               "output_tokens": evidence_response.usage.completion_tokens if evidence_response.usage else 0})
-                round_turns.append({"agent": "archaeologist", "action": "evidence", "content": evidence_text})
+                               "input_tokens": ev_in, "output_tokens": ev_out})
+                round_turns.append({"agent": agent_def.handle, "action": "evidence", "content": evidence_text})
 
             debate_rounds.append({
                 "round": round_num,
@@ -896,141 +690,72 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None,
         all_votes: list[dict] = []
 
         # Determine voting agents
-        voting_agents = agent_registry.list_voting() if use_registry else None
+        voting_agents = agent_registry.list_voting()
+
+        # Build debate context string for vote prompts
+        debate_context = (
+            f"Skeptic's challenges:\n{challenge_text}\n\n"
+            f"Archaeologist's evidence:\n{evidence_text}"
+        )
 
         for proposal in proposals:
-            if use_registry and voting_agents:
-                # Registry-driven voting
-                for agent_def in voting_agents:
-                    agent = agent_def.handle
-                    try:
-                        vote_prompt = agent_def.get_prompt(
-                            "vote",
-                            repo_name=f"{repo_org}/{repo_name}",
-                            proposal_title=proposal["title"],
-                            proposal_goal=proposal["goal"],
-                            proposal_effort=proposal.get("effort", ""),
-                            proposal_description=proposal.get("description", ""),
-                            challenge_text=challenge_text,
-                            evidence_text=evidence_text,
-                        )
-                        if not vote_prompt:
-                            # Fallback generic vote prompt
-                            vote_prompt = (
-                                f"You are the {agent.capitalize()} agent. "
-                                f"You are voting on this proposal for {repo_org}/{repo_name}:\n\n"
-                                f"Title: {proposal['title']}\nGoal: {proposal['goal']}\n"
-                                f"Effort: {proposal['effort']}\nDescription: {proposal.get('description', '')}\n\n"
-                                f"Context from debate:\n- Skeptic: {challenge_text}\n"
-                                f"- Archaeologist: {evidence_text}\n\n"
-                                "Vote YES, NO, or ABSTAIN. Include your confidence (0.0-1.0) and a "
-                                "one-sentence rationale.\n"
-                                "Format: [VOTE:YES|NO|ABSTAIN] Rationale. Confidence: 0.X"
-                            )
-                        else:
-                            vote_prompt = agent_def.build_system_prompt() + "\n\n" + vote_prompt
+            for agent_def in voting_agents:
+                agent = agent_def.handle
+                try:
+                    vote_user = agent_def.get_prompt(
+                        "vote",
+                        repo_name=f"{repo_org}/{repo_name}",
+                        proposal_title=proposal["title"],
+                        proposal_goal=proposal["goal"],
+                        proposal_effort=proposal.get("effort", ""),
+                        proposal_description=proposal.get("description", ""),
+                        challenge_text=challenge_text,
+                        evidence_text=evidence_text,
+                        debate_context=debate_context,
+                    )
+                    if not vote_user:
+                        continue
+                    vote_system = agent_def.build_system_prompt(memory_context="")
 
-                        vote_response = await client.chat.completions.create(
-                            model=MODEL_LIGHT,
-                            messages=[{"role": "system", "content": vote_prompt}],
-                            **_model_kwargs(MODEL_LIGHT, MAX_TOKENS_VOTE),
-                            temperature=0.2,
-                        )
-                        vote_text = vote_response.choices[0].message.content or ""
+                    vote_text, v_in, v_out = await llm_call(
+                        client, vote_system, vote_user,
+                        MODEL_LIGHT, MAX_TOKENS_VOTE, 0.2,
+                    )
 
-                        vote_type = "YES"
-                        if "[VOTE:NO]" in vote_text:
-                            vote_type = "NO"
-                        elif "[VOTE:ABSTAIN]" in vote_text:
-                            vote_type = "ABSTAIN"
-                        elif "NO" in vote_text.upper()[:20]:
-                            vote_type = "NO"
+                    vote_type = "YES"
+                    if "[VOTE:NO]" in vote_text:
+                        vote_type = "NO"
+                    elif "[VOTE:ABSTAIN]" in vote_text:
+                        vote_type = "ABSTAIN"
+                    elif "NO" in vote_text.upper()[:20]:
+                        vote_type = "NO"
 
-                        conf_match = re.search(r"Confidence:\s*([\d.]+)", vote_text)
-                        confidence = float(conf_match.group(1)) if conf_match else 0.7
-                        confidence = min(1.0, max(0.0, confidence))
+                    conf_match = re.search(r"Confidence:\s*([\d.]+)", vote_text)
+                    confidence = float(conf_match.group(1)) if conf_match else 0.7
+                    confidence = min(1.0, max(0.0, confidence))
 
-                        vote = {
-                            "id": str(uuid.uuid4()),
-                            "run_id": run_id,
-                            "proposal_id": proposal["id"],
-                            "agent": agent,
-                            "agent_id": agent,
-                            "vote": vote_type,
-                            "vote_type": "approve" if vote_type == "YES" else "reject",
-                            "rationale": vote_text.strip(),
-                            "reasoning": vote_text.strip(),
-                            "confidence": confidence,
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                        all_votes.append(vote)
-                        proposal.setdefault("votes", []).append(vote)
-                        emit(
-                            agent, "vote_cast",
-                            f"[VOTE:{vote_type}] on '{proposal['title']}' (confidence: {confidence})",
-                            "synthesis", structured=vote,
-                        )
-                    except Exception as e:
-                        emit(agent, "vote_cast", f"Vote error: {e!s:.100}", "synthesis")
-            else:
-                # Fallback: hardcoded voting
-                vote_prompt = (
-                    f"You are voting on this proposal for {repo_org}/{repo_name}:\n\n"
-                    f"Title: {proposal['title']}\nGoal: {proposal['goal']}\n"
-                    f"Effort: {proposal['effort']}\nDescription: {proposal.get('description', '')}\n\n"
-                    f"Context from debate:\n- Skeptic: {challenge_text}\n"
-                    f"- Archaeologist: {evidence_text}\n\n"
-                    "Vote YES, NO, or ABSTAIN. Include your confidence (0.0-1.0) and a "
-                    "one-sentence rationale.\n"
-                    "Format: [VOTE:YES|NO|ABSTAIN] Rationale. Confidence: 0.X"
-                )
-                for agent in ["archaeologist", "skeptic", "visionary"]:
-                    try:
-                        vote_response = await client.chat.completions.create(
-                            model=MODEL_LIGHT,
-                            messages=[{
-                                "role": "system",
-                                "content": f"You are the {agent.capitalize()} agent. {vote_prompt}",
-                            }],
-                            **_model_kwargs(MODEL_LIGHT, MAX_TOKENS_VOTE),
-                            temperature=0.2,
-                        )
-                        vote_text = vote_response.choices[0].message.content or ""
-
-                        vote_type = "YES"
-                        if "[VOTE:NO]" in vote_text:
-                            vote_type = "NO"
-                        elif "[VOTE:ABSTAIN]" in vote_text:
-                            vote_type = "ABSTAIN"
-                        elif "NO" in vote_text.upper()[:20]:
-                            vote_type = "NO"
-
-                        conf_match = re.search(r"Confidence:\s*([\d.]+)", vote_text)
-                        confidence = float(conf_match.group(1)) if conf_match else 0.7
-                        confidence = min(1.0, max(0.0, confidence))
-
-                        vote = {
-                            "id": str(uuid.uuid4()),
-                            "run_id": run_id,
-                            "proposal_id": proposal["id"],
-                            "agent": agent,
-                            "agent_id": agent,
-                            "vote": vote_type,
-                            "vote_type": "approve" if vote_type == "YES" else "reject",
-                            "rationale": vote_text.strip(),
-                            "reasoning": vote_text.strip(),
-                            "confidence": confidence,
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        }
-                        all_votes.append(vote)
-                        proposal.setdefault("votes", []).append(vote)
-                        emit(
-                            agent, "vote_cast",
-                            f"[VOTE:{vote_type}] on '{proposal['title']}' (confidence: {confidence})",
-                            "synthesis", structured=vote,
-                        )
-                    except Exception as e:
-                        emit(agent, "vote_cast", f"Vote error: {e!s:.100}", "synthesis")
+                    vote = {
+                        "id": str(uuid.uuid4()),
+                        "run_id": run_id,
+                        "proposal_id": proposal["id"],
+                        "agent": agent,
+                        "agent_id": agent,
+                        "vote": vote_type,
+                        "vote_type": "approve" if vote_type == "YES" else "reject",
+                        "rationale": vote_text.strip(),
+                        "reasoning": vote_text.strip(),
+                        "confidence": confidence,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    all_votes.append(vote)
+                    proposal.setdefault("votes", []).append(vote)
+                    emit(
+                        agent, "vote_cast",
+                        f"[VOTE:{vote_type}] on '{proposal['title']}' (confidence: {confidence})",
+                        "synthesis", structured=vote,
+                    )
+                except Exception as e:
+                    emit(agent, "vote_cast", f"Vote error: {e!s:.100}", "synthesis")
 
         # Determine outcomes
         for proposal in proposals:
@@ -1139,97 +864,41 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None,
                     f"\n> **DISSENT ({v['agent'].capitalize()}):** {v['rationale']}\n"
                 )
 
-        scribe_def = agent_registry.get_scribe() if use_registry else None
+        scribe_def = agent_registry.get_scribe()
+        if not scribe_def:
+            raise RuntimeError("Scribe agent not found in registry")
 
-        if use_registry and scribe_def:
-            rfc_prompt = scribe_def.get_prompt(
-                "synthesize",
-                repo_name=f"{repo_org}/{repo_name}",
-                repo_url=repo_url,
-                file_count=str(len(files)),
-                total_loc=f"{total_loc:,}",
-                lang_summary=lang_summary,
-                author_count=str(len(authors)),
-                analysis_date=datetime.now(timezone.utc).strftime('%Y-%m-%d'),
-                archaeologist_analysis=agent_analyses.get("archaeologist", ""),
-                skeptic_analysis=agent_analyses.get("skeptic", ""),
-                proposal_text=proposal_text,
-                challenge_text=challenge_text,
-                evidence_text=evidence_text,
-                all_findings_text=full_findings_text,
-                vote_summary=full_vote_details,
-                proposal_count=str(len(proposals)),
-            )
-            rfc_prompt = scribe_def.build_system_prompt() + "\n\n" + rfc_prompt
-            scribe_temp = scribe_def.temperature
-            scribe_max_tokens = scribe_def.max_tokens
-        else:
-            rfc_prompt = (
-                "You are the Scribe — the council's neutral secretary and institutional historian. "
-                "Your job is to produce a PREMIUM, publication-ready RFC document. "
-                "This is NOT a summary. It is a formal institutional record.\n\n"
-                "REQUIREMENTS:\n"
-                "- Use proper markdown with ## section headers and ### sub-headers\n"
-                "- Write the Executive Summary as a highlighted blockquote (> prefix)\n"
-                "- Preserve every agent's voice verbatim — do NOT paraphrase or smooth over disagreements\n"
-                "- Quote agents directly using their name (e.g., 'The Skeptic noted: ...')\n"
-                "- Make it read like an institutional document, not a bullet-point summary\n"
-                "- Every section must be substantive and detailed\n\n"
-                f"## REPOSITORY\n"
-                f"**{repo_org}/{repo_name}** | {repo_url}\n"
-                f"Files: {len(files)} | LOC: {total_loc:,} | Languages: {lang_summary}\n"
-                f"Authors: {len(authors)} | Analysis date: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}\n\n"
-                "## FULL AGENT ANALYSES\n\n"
-                f"### Archaeologist (full)\n{agent_analyses.get('archaeologist', '')}\n\n"
-                f"### Skeptic (full)\n{agent_analyses.get('skeptic', '')}\n\n"
-                f"### Visionary — Proposals\n{proposal_text}\n\n"
-                f"### Skeptic — Challenges\n{challenge_text}\n\n"
-                f"### Archaeologist — Debate Evidence\n{evidence_text}\n\n"
-                "## FULL FINDINGS\n"
-                f"{full_findings_text}\n\n"
-                "## FULL VOTE RECORD\n"
-                f"{full_vote_details}\n\n"
-                "---\n\n"
-                "NOW WRITE THE RFC DOCUMENT with EXACTLY these sections:\n\n"
-                "## RFC: [Repository Name] — Council Analysis Report\n"
-                "*(header block: repo, date, participating agents, consensus score)*\n\n"
-                "## Executive Summary\n"
-                "> *(3-5 sentences as a blockquote — the single most important takeaway, "
-                "overall health assessment, and top recommendation)*\n\n"
-                "## Findings\n"
-                "*(Organized by severity: CRITICAL first, then HIGH, MEDIUM, INFO. "
-                "Each finding gets: severity badge in bold, agent attribution in brackets, "
-                "the finding title, and its implication on a new line.)*\n\n"
-                "## Proposals & Council Vote\n"
-                f"*(All {len(proposals)} proposals. Each proposal gets: full description, "
-                "a vote matrix table with columns Agent | Vote | Confidence | Rationale, "
-                "outcome (PASSED/FAILED), and a DISSENT block for any NO votes with full rationale.)*\n\n"
-                "## Action Items\n"
-                "*(Numbered list from PASSED proposals only. Each item: action description, "
-                "effort badge [XS/S/M/L/XL], and responsible area. "
-                "If a proposal was REJECTED, note it was considered but not adopted.)*\n\n"
-                "## Cost Summary\n"
-                "*(Table: Phase | Tokens | Estimated Cost USD — plus a total row)*\n\n"
-                "Write the complete document now. Be thorough. Every section must be substantive."
-            )
-            scribe_temp = 0.1
-            scribe_max_tokens = MAX_TOKENS_RFC
-
-        rfc_response = await client.chat.completions.create(
-            model=MODEL_HEAVY,
-            messages=[{"role": "system", "content": rfc_prompt}],
-            **_model_kwargs(MODEL_HEAVY, scribe_max_tokens),
-            temperature=scribe_temp,
+        rfc_system = scribe_def.build_system_prompt(memory_context="")
+        rfc_user = scribe_def.get_prompt(
+            "synthesize",
+            repo_name=f"{repo_org}/{repo_name}",
+            repo_url=repo_url,
+            file_count=str(len(files)),
+            total_loc=f"{total_loc:,}",
+            lang_summary=lang_summary,
+            author_count=str(len(authors)),
+            analysis_date=datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+            archaeologist_analysis=agent_analyses.get("archaeologist", ""),
+            skeptic_analysis=agent_analyses.get("skeptic", ""),
+            proposal_text=proposal_text,
+            challenge_text=challenge_text,
+            evidence_text=evidence_text,
+            all_findings_text=full_findings_text,
+            vote_summary=full_vote_details,
+            proposal_count=str(len(proposals)),
         )
-        rfc_content = rfc_response.choices[0].message.content or ""
+
+        rfc_content, rfc_in, rfc_out = await llm_call(
+            client, rfc_system, rfc_user,
+            MODEL_HEAVY, scribe_def.max_tokens, scribe_def.temperature,
+        )
 
         run["rfc_content"] = rfc_content
         emit(
             "scribe", "agent_response", "RFC synthesis complete", "scribing",
             metadata={
                 "provider": "openai", "model": MODEL_HEAVY,
-                "input_tokens": rfc_response.usage.prompt_tokens if rfc_response.usage else 0,
-                "output_tokens": rfc_response.usage.completion_tokens if rfc_response.usage else 0,
+                "input_tokens": rfc_in, "output_tokens": rfc_out,
             },
         )
         # Persist RFC content as a special event so it survives restart
