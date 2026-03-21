@@ -1,4 +1,4 @@
-"""Real council analysis pipeline — clones repo, calls OpenAI, generates RFC."""
+"""Real council analysis pipeline — clones repo, calls Claude Opus 4.6, generates RFC."""
 from __future__ import annotations
 
 import asyncio
@@ -10,39 +10,46 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from openai import AsyncOpenAI
+import anthropic
 
 # ── Model configuration ──
-# ── Model configuration ──
-# GPT-5.4 = most capable, 128k context, best reasoning
-# GPT-4.1-mini = fast + cheap for simple structured tasks
-MODEL_HEAVY = "gpt-5.4"         # Best: analysis, debate, RFC generation
-MODEL_LIGHT = "gpt-4.1-mini"    # Fast: voting, short structured responses
+# Claude Opus 4.6 = most capable Anthropic model, 200k context, best reasoning
+# Claude Haiku 4.5 = fast + cheap for simple structured tasks
+MODEL_HEAVY = "claude-opus-4-6"          # Best: analysis, debate, RFC generation
+MODEL_LIGHT = "claude-haiku-4-5-20251001"  # Fast: voting, short responses
+PROVIDER = "anthropic"
 MAX_TOKENS_ANALYSIS = 8192      # Agent analysis — detailed findings
 MAX_TOKENS_DEBATE = 4096        # Debate — thorough argumentation
 MAX_TOKENS_VOTE = 500           # Vote — structured response
 MAX_TOKENS_RFC = 16384          # RFC — comprehensive institutional document
 
-# GPT-5.x uses max_completion_tokens, GPT-4.x uses max_tokens
-# We handle both via a helper
-def _model_kwargs(model: str, max_tokens: int) -> dict:
-    """Return the right token-limit kwarg for the model family."""
-    if model.startswith("gpt-5"):
-        return {"max_completion_tokens": max_tokens}
-    return {"max_tokens": max_tokens}
-
 
 def _load_api_key() -> str:
-    """Load OpenAI API key from environment or project root .env file."""
-    key = os.environ.get("OPENAI_API_KEY", "")
+    """Load Anthropic API key from environment or project root .env file."""
+    key = os.environ.get("ANTHROPIC_API_KEY", "")
     if not key:
-        env_path = Path(__file__).parents[4] / ".env"  # project root .env
+        env_path = Path(__file__).parents[4] / ".env"
         if env_path.exists():
             for line in env_path.read_text().splitlines():
-                if line.startswith("OPENAI_API_KEY="):
+                if line.startswith("ANTHROPIC_API_KEY="):
                     key = line.split("=", 1)[1].strip()
                     break
+    # Fallback to OpenAI if no Anthropic key
+    if not key:
+        key = os.environ.get("OPENAI_API_KEY", "")
+        if not key:
+            env_path = Path(__file__).parents[4] / ".env"
+            if env_path.exists():
+                for line in env_path.read_text().splitlines():
+                    if line.startswith("OPENAI_API_KEY="):
+                        key = line.split("=", 1)[1].strip()
+                        break
     return key
+
+
+def _is_anthropic_key(key: str) -> bool:
+    """Check if the key is an Anthropic key (starts with sk-ant-)."""
+    return key.startswith("sk-ant-") or key.startswith("sk-")
 
 
 # Extension -> language mapping
@@ -96,10 +103,46 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
     if not api_key:
         run["status"] = "failed"
         run["phase"] = "error"
-        emit("system", "run_failed", "No OpenAI API key configured", "error")
+        emit("system", "run_failed", "No API key configured (set ANTHROPIC_API_KEY or OPENAI_API_KEY in .env)", "error")
         return
 
-    client = AsyncOpenAI(api_key=api_key)
+    # Detect provider from key and create appropriate client
+    use_anthropic = api_key.startswith("sk-ant-")
+    if use_anthropic:
+        aclient = anthropic.AsyncAnthropic(api_key=api_key)
+    else:
+        # Fallback to OpenAI
+        from openai import AsyncOpenAI
+        oclient = AsyncOpenAI(api_key=api_key)
+
+    async def llm_call(system_prompt: str, model: str, max_tokens: int, temperature: float = 0.3) -> tuple[str, int, int]:
+        """Unified LLM call — works with both Anthropic and OpenAI."""
+        if use_anthropic:
+            response = await aclient.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                system=system_prompt,
+                messages=[{"role": "user", "content": "Analyze and respond based on your system instructions."}],
+            )
+            text = response.content[0].text if response.content else ""
+            return text, response.usage.input_tokens, response.usage.output_tokens
+        else:
+            # OpenAI fallback
+            from openai import AsyncOpenAI as _OAI
+            kwargs = {"max_completion_tokens": max_tokens} if model.startswith("gpt-5") else {"max_tokens": max_tokens}
+            response = await oclient.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": system_prompt}],
+                temperature=temperature,
+                **kwargs,
+            )
+            text = response.choices[0].message.content or ""
+            tokens_in = response.usage.prompt_tokens if response.usage else 0
+            tokens_out = response.usage.completion_tokens if response.usage else 0
+            return text, tokens_in, tokens_out
+
+    provider_name = "anthropic" if use_anthropic else "openai"
 
     tmpdir: str | None = None
     try:
@@ -287,21 +330,13 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         ) -> tuple[list[dict], str]:
             emit(agent_name, "agent_thinking", f"{agent_name.capitalize()} analyzing repository...", "analysing")
             try:
-                response = await client.chat.completions.create(
-                    model=MODEL_HEAVY,
-                    messages=[{"role": "system", "content": prompt}],
-                    **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_ANALYSIS),
-                    temperature=_temperatures.get(agent_name, 0.3),
-                )
-                text = response.choices[0].message.content or ""
-                tokens_in = response.usage.prompt_tokens if response.usage else 0
-                tokens_out = response.usage.completion_tokens if response.usage else 0
+                text, tokens_in, tokens_out = await llm_call(prompt, MODEL_HEAVY, MAX_TOKENS_ANALYSIS, temperature=_temperatures.get(agent_name, 0.3))
                 cost = round((tokens_in * 2.5 + tokens_out * 10) / 1_000_000, 4)
 
                 emit(
                     agent_name, "agent_response", text, "analysing",
                     metadata={
-                        "provider": "openai", "model": MODEL_HEAVY,
+                        "provider": provider_name, "model": MODEL_HEAVY,
                         "input_tokens": tokens_in, "output_tokens": tokens_out,
                         "cost_usd": cost,
                     },
@@ -382,19 +417,13 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             "Be specific and actionable. Reference actual files/patterns from the codebase."
         )
 
-        proposal_response = await client.chat.completions.create(
-            model=MODEL_HEAVY,
-            messages=[{"role": "system", "content": proposal_prompt}],
-            **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-            temperature=0.6,
-        )
-        proposal_text = proposal_response.choices[0].message.content or ""
+        proposal_text, _p_tok_in, _p_tok_out = await llm_call(proposal_prompt, MODEL_HEAVY, MAX_TOKENS_DEBATE, temperature=0.6)
         emit(
             "visionary", "agent_response", proposal_text, "debate",
             metadata={
-                "provider": "openai", "model": MODEL_HEAVY,
-                "input_tokens": proposal_response.usage.prompt_tokens if proposal_response.usage else 0,
-                "output_tokens": proposal_response.usage.completion_tokens if proposal_response.usage else 0,
+                "provider": provider_name, "model": MODEL_HEAVY,
+                "input_tokens": _p_tok_in,
+                "output_tokens": _p_tok_out,
             },
         )
 
@@ -480,17 +509,11 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                     "You may declare DEADLOCK on any proposal where agreement is impossible."
                 )
 
-            challenge_response = await client.chat.completions.create(
-                model=MODEL_HEAVY,
-                messages=[{"role": "system", "content": challenge_prompt}],
-                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-                temperature=0.2,
-            )
-            challenge_text = challenge_response.choices[0].message.content or ""
+            challenge_text, _ch_tok_in, _ch_tok_out = await llm_call(challenge_prompt, MODEL_HEAVY, MAX_TOKENS_DEBATE, temperature=0.2)
             emit("skeptic", "agent_speaking", challenge_text, "debate",
-                 metadata={"provider": "openai", "model": MODEL_HEAVY,
-                           "input_tokens": challenge_response.usage.prompt_tokens if challenge_response.usage else 0,
-                           "output_tokens": challenge_response.usage.completion_tokens if challenge_response.usage else 0})
+                 metadata={"provider": provider_name, "model": MODEL_HEAVY,
+                           "input_tokens": _ch_tok_in,
+                           "output_tokens": _ch_tok_out})
 
             # Visionary responds to challenges
             if round_num == 1:
@@ -512,17 +535,11 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                     "Final round — make your closing argument for each proposal."
                 )
 
-            visionary_defend = await client.chat.completions.create(
-                model=MODEL_HEAVY,
-                messages=[{"role": "system", "content": visionary_defend_prompt}],
-                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-                temperature=0.5,
-            )
-            visionary_response_text = visionary_defend.choices[0].message.content or ""
+            visionary_response_text, _vd_tok_in, _vd_tok_out = await llm_call(visionary_defend_prompt, MODEL_HEAVY, MAX_TOKENS_DEBATE, temperature=0.5)
             emit("visionary", "agent_speaking", visionary_response_text, "debate",
-                 metadata={"provider": "openai", "model": MODEL_HEAVY,
-                           "input_tokens": visionary_defend.usage.prompt_tokens if visionary_defend.usage else 0,
-                           "output_tokens": visionary_defend.usage.completion_tokens if visionary_defend.usage else 0})
+                 metadata={"provider": provider_name, "model": MODEL_HEAVY,
+                           "input_tokens": _vd_tok_in,
+                           "output_tokens": _vd_tok_out})
 
             # Check for revised/withdrawn proposals
             for p in proposals:
@@ -544,17 +561,11 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 "Provide factual evidence from commit history and file patterns. "
                 "State which side the data supports for each proposal. Be neutral and data-driven."
             )
-            evidence_response = await client.chat.completions.create(
-                model=MODEL_HEAVY,
-                messages=[{"role": "system", "content": evidence_prompt}],
-                **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_DEBATE),
-                temperature=0.3,
-            )
-            evidence_text = evidence_response.choices[0].message.content or ""
+            evidence_text, _ev_tok_in, _ev_tok_out = await llm_call(evidence_prompt, MODEL_HEAVY, MAX_TOKENS_DEBATE, temperature=0.3)
             emit("archaeologist", "agent_speaking", evidence_text, "debate",
-                 metadata={"provider": "openai", "model": MODEL_HEAVY,
-                           "input_tokens": evidence_response.usage.prompt_tokens if evidence_response.usage else 0,
-                           "output_tokens": evidence_response.usage.completion_tokens if evidence_response.usage else 0})
+                 metadata={"provider": provider_name, "model": MODEL_HEAVY,
+                           "input_tokens": _ev_tok_in,
+                           "output_tokens": _ev_tok_out})
 
             debate_rounds.append({
                 "round": round_num,
@@ -591,16 +602,10 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             )
             for agent in ["archaeologist", "skeptic", "visionary"]:
                 try:
-                    vote_response = await client.chat.completions.create(
-                        model=MODEL_LIGHT,
-                        messages=[{
-                            "role": "system",
-                            "content": f"You are the {agent.capitalize()} agent. {vote_prompt}",
-                        }],
-                        **_model_kwargs(MODEL_LIGHT, MAX_TOKENS_VOTE),
-                        temperature=0.2,
+                    vote_text, _v_tok_in, _v_tok_out = await llm_call(
+                        f"You are the {agent.capitalize()} agent. {vote_prompt}",
+                        MODEL_LIGHT, MAX_TOKENS_VOTE, temperature=0.2,
                     )
-                    vote_text = vote_response.choices[0].message.content or ""
 
                     vote_type = "YES"
                     if "[VOTE:NO]" in vote_text:
@@ -762,21 +767,15 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             "Write the complete document now. Be thorough. Every section must be substantive."
         )
 
-        rfc_response = await client.chat.completions.create(
-            model=MODEL_HEAVY,
-            messages=[{"role": "system", "content": rfc_prompt}],
-            **_model_kwargs(MODEL_HEAVY, MAX_TOKENS_RFC),
-            temperature=0.1,
-        )
-        rfc_content = rfc_response.choices[0].message.content or ""
+        rfc_content, _rfc_tok_in, _rfc_tok_out = await llm_call(rfc_prompt, MODEL_HEAVY, MAX_TOKENS_RFC, temperature=0.1)
 
         run["rfc_content"] = rfc_content
         emit(
             "scribe", "agent_response", "RFC synthesis complete", "scribing",
             metadata={
-                "provider": "openai", "model": MODEL_HEAVY,
-                "input_tokens": rfc_response.usage.prompt_tokens if rfc_response.usage else 0,
-                "output_tokens": rfc_response.usage.completion_tokens if rfc_response.usage else 0,
+                "provider": provider_name, "model": MODEL_HEAVY,
+                "input_tokens": _rfc_tok_in,
+                "output_tokens": _rfc_tok_out,
             },
         )
         emit("system", "phase_completed", "RFC finalized", "scribing")
