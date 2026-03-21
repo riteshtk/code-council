@@ -293,7 +293,7 @@ export default function ConfigPage() {
 
   if (loading && !config) {
     return (
-      <div className="flex-1 p-8 max-w-[1000px] mx-auto w-full space-y-4">
+      <div className="flex-1 px-8 lg:px-12 py-8 w-full space-y-4">
         <Skeleton className="h-8 w-48 rounded-lg" />
         <Skeleton className="h-12 w-full rounded-xl" />
         <Skeleton className="h-64 w-full rounded-xl" />
@@ -302,7 +302,7 @@ export default function ConfigPage() {
   }
 
   return (
-    <div className="flex-1 max-w-[1000px] mx-auto px-8 py-8 animate-fade-in">
+    <div className="flex-1 px-8 lg:px-12 py-8 animate-fade-in">
       {/* Header with save */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-[var(--cc-text)]">Configuration</h1>

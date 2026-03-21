@@ -142,7 +142,7 @@ export default function SessionsPage() {
   const completedRuns = runs.filter((r) => r.status === "completed").length;
 
   return (
-    <div className="flex-1 max-w-[1200px] mx-auto px-8 py-8 animate-fade-in">
+    <div className="flex-1 px-8 lg:px-12 py-8 animate-fade-in">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-[var(--cc-text)]">Council Sessions</h1>
