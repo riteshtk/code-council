@@ -74,7 +74,7 @@ export function AgentPanel({ agentId, events, findings, isActive = false, runCom
   const contentPreview = useMemo(() => {
     if (!lastContent) return "";
     const lines = lastContent.split("\n").filter((l: string) => l.trim());
-    return lines.slice(0, 2).join(" ").slice(0, 150);
+    return lines.slice(0, 2).join(" ").slice(0, 200);
   }, [lastContent]);
 
   const effectiveActive = isActive && !runCompleted;
@@ -140,7 +140,7 @@ export function AgentPanel({ agentId, events, findings, isActive = false, runCom
           {expanded ? (
             <div className="max-h-[250px] overflow-y-auto prose-agent-sm">
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {lastContent.slice(0, 1500)}
+                {lastContent}
               </ReactMarkdown>
             </div>
           ) : (

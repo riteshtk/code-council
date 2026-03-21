@@ -101,7 +101,7 @@ function getEventContent(event: Event): string {
 
   try {
     const s = JSON.stringify(p);
-    return s && s !== "{}" ? s.slice(0, 120) : eventType || "Event";
+    return s && s !== "{}" ? s.slice(0, 500) : eventType || "Event";
   } catch {
     return eventType || "Event";
   }

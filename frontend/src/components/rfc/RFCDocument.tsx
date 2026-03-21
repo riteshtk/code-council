@@ -559,7 +559,7 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
                 <span style={{ color: event.agent_id ? getAgentColor(event.agent_id) : "var(--cc-text-muted)" }}>
                   {event.agent_id || "System"}
                 </span>
-                : {JSON.stringify(event.payload).slice(0, 200)}
+                : {JSON.stringify(event.payload || {})}
               </div>
             ))}
           </div>

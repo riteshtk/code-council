@@ -210,7 +210,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             p = repo_path / name
             if p.exists():
                 try:
-                    key_file_contents += f"\n--- README ---\n{p.read_text(errors='ignore')[:2000]}\n"
+                    key_file_contents += f"\n--- README ---\n{p.read_text(errors='ignore')[:4000]}\n"
                 except Exception:
                     pass
                 break
@@ -222,7 +222,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             mp = repo_path / manifest
             if mp.exists():
                 try:
-                    key_file_contents += f"\n--- {manifest} ---\n{mp.read_text(errors='ignore')[:1500]}\n"
+                    key_file_contents += f"\n--- {manifest} ---\n{mp.read_text(errors='ignore')[:3000]}\n"
                 except Exception:
                     pass
 
@@ -367,14 +367,14 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
         emit("system", "phase_started", "Debate phase: Adversarial topology", "debate")
 
         findings_summary = "\n".join(
-            [f"[{f['severity'].upper()}] ({f['agent']}) {f['content'][:120]}" for f in all_findings]
+            [f"[{f['severity'].upper()}] ({f['agent']}) {f['content']}" for f in all_findings]
         )
 
         proposal_prompt = (
             f"You are the Visionary. Based on these findings from the council analysis "
             f"of {repo_org}/{repo_name}:\n\n{findings_summary}\n\n"
-            f"Archaeologist's analysis:\n{agent_analyses.get('archaeologist', '')[:800]}\n\n"
-            f"Skeptic's analysis:\n{agent_analyses.get('skeptic', '')[:800]}\n\n"
+            f"Archaeologist's analysis:\n{agent_analyses.get('archaeologist', '')}\n\n"
+            f"Skeptic's analysis:\n{agent_analyses.get('skeptic', '')}\n\n"
             "Propose 2-4 concrete improvements. For each, use this format:\n"
             "[PROPOSAL]\nTitle: <short title>\nGoal: <one sentence goal>\n"
             "Effort: <XS|S|M|L|XL>\nBreaking: <yes|no>\n"
@@ -434,7 +434,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             proposals.append({
                 "id": str(uuid.uuid4()), "run_id": run_id, "proposal_number": 1,
                 "version": 1, "title": "Address identified findings",
-                "goal": "Improve codebase quality", "description": proposal_text[:200],
+                "goal": "Improve codebase quality", "description": proposal_text,
                 "effort": "M", "status": "proposed", "agent_id": "visionary",
                 "author_agent": "visionary", "breaking_change": False,
                 "finding_ids": [], "votes": [],
@@ -471,8 +471,8 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 # Subsequent rounds: Skeptic responds to Visionary's defense
                 challenge_prompt = (
                     f"You are the Skeptic. This is round {round_num} of the debate on {repo_org}/{repo_name}.\n\n"
-                    f"Visionary's latest response:\n{visionary_response_text[:800]}\n\n"
-                    f"Archaeologist's evidence:\n{evidence_text[:800]}\n\n"
+                    f"Visionary's latest response:\n{visionary_response_text}\n\n"
+                    f"Archaeologist's evidence:\n{evidence_text}\n\n"
                     f"Current proposals:\n" +
                     "\n".join([f"P-{p['proposal_number']}: {p['title']} (status: {p['status']})" for p in proposals]) +
                     "\n\nHave your concerns been addressed? Update your positions. "
@@ -506,8 +506,8 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             else:
                 visionary_defend_prompt = (
                     f"You are the Visionary. Round {round_num} of debate on {repo_org}/{repo_name}.\n\n"
-                    f"Skeptic's latest:\n{challenge_text[:800]}\n\n"
-                    f"Archaeologist's evidence:\n{evidence_text[:800]}\n\n"
+                    f"Skeptic's latest:\n{challenge_text}\n\n"
+                    f"Archaeologist's evidence:\n{evidence_text}\n\n"
                     "Respond. Have the Skeptic's remaining concerns been addressed by your revisions? "
                     "Final round — make your closing argument for each proposal."
                 )
@@ -539,8 +539,8 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             # Archaeologist provides evidence
             evidence_prompt = (
                 f"You are the Archaeologist. Round {round_num} of debate on {repo_org}/{repo_name}.\n\n"
-                f"Visionary's position:\n{visionary_response_text[:600]}\n"
-                f"Skeptic's challenges:\n{challenge_text[:600]}\n\n"
+                f"Visionary's position:\n{visionary_response_text}\n"
+                f"Skeptic's challenges:\n{challenge_text}\n\n"
                 "Provide factual evidence from commit history and file patterns. "
                 "State which side the data supports for each proposal. Be neutral and data-driven."
             )
@@ -559,9 +559,9 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             debate_rounds.append({
                 "round": round_num,
                 "turns": [
-                    {"agent": "skeptic", "action": "challenge", "content": challenge_text[:300]},
-                    {"agent": "visionary", "action": "respond", "content": visionary_response_text[:300]},
-                    {"agent": "archaeologist", "action": "evidence", "content": evidence_text[:300]},
+                    {"agent": "skeptic", "action": "challenge", "content": challenge_text},
+                    {"agent": "visionary", "action": "respond", "content": visionary_response_text},
+                    {"agent": "archaeologist", "action": "evidence", "content": evidence_text},
                 ],
             })
 
@@ -583,8 +583,8 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
                 f"You are voting on this proposal for {repo_org}/{repo_name}:\n\n"
                 f"Title: {proposal['title']}\nGoal: {proposal['goal']}\n"
                 f"Effort: {proposal['effort']}\nDescription: {proposal.get('description', '')}\n\n"
-                f"Context from debate:\n- Skeptic: {challenge_text[:300]}\n"
-                f"- Archaeologist: {evidence_text[:300]}\n\n"
+                f"Context from debate:\n- Skeptic: {challenge_text}\n"
+                f"- Archaeologist: {evidence_text}\n\n"
                 "Vote YES, NO, or ABSTAIN. Include your confidence (0.0-1.0) and a "
                 "one-sentence rationale.\n"
                 "Format: [VOTE:YES|NO|ABSTAIN] Rationale. Confidence: 0.X"
@@ -664,7 +664,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             p_votes = [v for v in all_votes if v["proposal_id"] == proposal["id"]]
             vote_lines = "\n".join(
                 [f"  - {v['agent'].capitalize()}: {v['vote']} ({v['confidence']}) -- "
-                 f"{v['rationale'][:80]}" for v in p_votes]
+                 f"{v['rationale']}" for v in p_votes]
             )
             status_label = "PASSED" if proposal["status"] == "accepted" else "FAILED"
             vote_summary += (
@@ -705,7 +705,7 @@ async def run_real_council(run: dict, runs_store: dict) -> None:
             for v in p_votes:
                 full_vote_details += (
                     f"| {v['agent'].capitalize()} | **{v['vote']}** | {v['confidence']:.0%} "
-                    f"| {v['rationale'][:120]} |\n"
+                    f"| {v['rationale']} |\n"
                 )
             no_votes = [v for v in p_votes if v["vote"] == "NO"]
             for v in no_votes:
