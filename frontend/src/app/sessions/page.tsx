@@ -281,7 +281,7 @@ export default function SessionsPage() {
                 return (
                   <tr
                     key={run.id}
-                    className="cursor-pointer hover:bg-[var(--cc-bg-hover)] transition-colors duration-200 border-b border-[rgba(30,30,46,0.5)]"
+                    className="cursor-pointer hover:bg-[var(--cc-bg-hover)] transition-colors duration-200 border-b border-[var(--cc-border)]"
                     onClick={() => router.push(`/debate/${run.id}`)}
                   >
                     <td className="py-3.5 px-3.5" onClick={(e) => e.stopPropagation()}>
@@ -422,7 +422,7 @@ export default function SessionsPage() {
 
                 {/* Memory items */}
                 <div className="text-xs leading-relaxed text-[var(--cc-text-muted)]">
-                  <div className="py-1.5 border-b border-[rgba(30,30,46,0.5)]">
+                  <div className="py-1.5 border-b border-[var(--cc-border)]">
                     {sessionCount > 0 ? "Memory data from previous sessions" : "No memory data yet"}
                   </div>
                   {sessionCount > 0 && (

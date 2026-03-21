@@ -146,10 +146,9 @@ export default function RFCPage() {
     <div className="flex-1 flex flex-col overflow-hidden" style={{ backgroundColor: "var(--cc-bg)" }}>
       {/* TOP BAR */}
       <div
-        className="flex items-center justify-between px-6 py-3 border-b shrink-0"
+        className="flex items-center justify-between px-6 py-3 border-b shrink-0 glass"
         style={{
           borderColor: "var(--cc-border)",
-          backgroundColor: "rgba(8,8,13,0.95)",
         }}
       >
         {/* Left: breadcrumb */}

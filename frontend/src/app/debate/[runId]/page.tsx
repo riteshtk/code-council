@@ -219,11 +219,9 @@ export default function DebatePage() {
     >
       {/* ═══════ TOP BAR ═══════ */}
       <div
-        className="flex items-center justify-between px-5 py-2.5 border-b shrink-0"
+        className="flex items-center justify-between px-5 py-2.5 border-b shrink-0 glass"
         style={{
           borderColor: "var(--cc-border)",
-          backgroundColor: "rgba(8,8,13,0.95)",
-          backdropFilter: "blur(20px)",
         }}
       >
         {/* Left: repo + status */}

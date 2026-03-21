@@ -557,7 +557,7 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
                 const color = getAgentColor(agent);
                 return (
                   <tr key={agent}>
-                    <td className="px-3 py-2 border-b" style={{ borderColor: "rgba(30,30,46,0.5)" }}>
+                    <td className="px-3 py-2 border-b" style={{ borderColor: "var(--cc-border)" }}>
                       <span className="flex items-center gap-2">
                         <span
                           className="w-2 h-2 rounded-full"
@@ -566,16 +566,16 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
                         {getDisplayName(agent)}
                       </span>
                     </td>
-                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "rgba(30,30,46,0.5)" }}>
+                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "var(--cc-border)" }}>
                       --
                     </td>
-                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "rgba(30,30,46,0.5)" }}>
+                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "var(--cc-border)" }}>
                       --
                     </td>
-                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "rgba(30,30,46,0.5)" }}>
+                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "var(--cc-border)" }}>
                       ${(agentCost as number).toFixed(2)}
                     </td>
-                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "rgba(30,30,46,0.5)" }}>
+                    <td className="px-3 py-2 border-b font-mono" style={{ borderColor: "var(--cc-border)" }}>
                       --
                     </td>
                   </tr>
