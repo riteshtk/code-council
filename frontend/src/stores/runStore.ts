@@ -29,13 +29,17 @@ function parseEventPayload(
 ): Partial<RunState> {
   const updates: Partial<RunState> = {};
 
-  switch (event.type) {
+  const eventType = event.type || event.event_type || "";
+  const payload = event.payload || event.structured || {};
+
+  switch (eventType) {
     case "phase_started":
     case "phase_completed":
-      if (event.phase) updates.phase = event.phase;
+      if (event.phase) updates.phase = event.phase as Phase;
       break;
-    case "finding_created": {
-      const finding = event.payload as unknown as Finding;
+    case "finding_created":
+    case "finding_emitted": {
+      const finding = payload as unknown as Finding;
       if (finding?.id) {
         const exists = state.findings.some((f) => f.id === finding.id);
         if (!exists) updates.findings = [...state.findings, finding];
@@ -43,7 +47,7 @@ function parseEventPayload(
       break;
     }
     case "proposal_created": {
-      const proposal = event.payload as unknown as Proposal;
+      const proposal = payload as unknown as Proposal;
       if (proposal?.id) {
         const exists = state.proposals.some((p) => p.id === proposal.id);
         if (!exists) updates.proposals = [...state.proposals, proposal];
@@ -51,11 +55,10 @@ function parseEventPayload(
       break;
     }
     case "vote_cast": {
-      const vote = event.payload as unknown as Vote;
+      const vote = payload as unknown as Vote;
       if (vote?.id) {
         const exists = state.votes.some((v) => v.id === vote.id);
         if (!exists) updates.votes = [...state.votes, vote];
-        // Update proposal votes too
         if (vote.proposal_id) {
           updates.proposals = state.proposals.map((p) =>
             p.id === vote.proposal_id
@@ -66,8 +69,9 @@ function parseEventPayload(
       }
       break;
     }
-    case "cost_update": {
-      const costData = event.payload as unknown as CostReport;
+    case "cost_update":
+    case "budget_warning": {
+      const costData = payload as unknown as CostReport;
       if (costData) updates.cost = costData;
       break;
     }

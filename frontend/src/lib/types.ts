@@ -83,14 +83,30 @@ export interface Proposal {
 }
 
 export interface Event {
-  id: string;
+  id?: string;
+  event_id?: string;
   run_id: string;
-  type: EventType;
-  phase?: Phase;
+  type?: EventType;
+  event_type?: string;
+  phase?: Phase | string;
+  agent?: string;
   agent_id?: string;
-  payload: Record<string, unknown>;
+  content?: string;
+  structured?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
   timestamp: string;
   sequence: number;
+  round?: number | null;
+  metadata?: {
+    provider?: string;
+    model?: string;
+    input_tokens?: number;
+    output_tokens?: number;
+    cost_usd?: number;
+    latency_ms?: number;
+    cached?: boolean;
+    fallback?: boolean;
+  };
 }
 
 export interface CostReport {

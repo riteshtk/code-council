@@ -3,111 +3,180 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { Event } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Search, Filter } from "lucide-react";
 
-const EVENT_TYPE_LABELS: Record<string, string> = {
-  run_started: "START",
-  run_completed: "DONE",
-  run_failed: "FAIL",
-  phase_started: "PHASE",
-  phase_completed: "PHASE",
-  agent_thinking: "THINK",
-  agent_response: "RESP",
-  finding_created: "FIND",
-  proposal_created: "PROP",
-  vote_cast: "VOTE",
-  consensus_reached: "CONS",
-  human_review_requested: "HITL",
-  human_review_completed: "HITL",
-  cost_update: "COST",
-  error: "ERR",
+const AGENT_SHORTKEYS: Record<string, string> = {
+  archaeologist: "arch",
+  skeptic: "skep",
+  visionary: "vis",
+  scribe: "scr",
 };
 
-const EVENT_TYPE_COLORS: Record<string, string> = {
-  run_started: "var(--cc-green)",
-  run_completed: "var(--cc-green)",
-  run_failed: "var(--cc-red)",
-  phase_started: "var(--cc-accent)",
-  phase_completed: "var(--cc-accent)",
-  agent_thinking: "var(--cc-yellow)",
-  agent_response: "var(--cc-blue)",
-  finding_created: "var(--cc-red)",
-  proposal_created: "var(--cc-accent)",
-  vote_cast: "var(--cc-yellow)",
-  consensus_reached: "var(--cc-green)",
-  human_review_requested: "#ff9500",
-  human_review_completed: "var(--cc-green)",
-  cost_update: "var(--cc-text-muted)",
-  error: "var(--cc-red)",
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  archaeologist: "Archaeologist",
+  skeptic: "Skeptic",
+  visionary: "Visionary",
+  scribe: "Scribe",
 };
 
-function EventItem({ event }: { event: Event }) {
-  const agentColor = event.agent_id ? getAgentColor(event.agent_id) : "var(--cc-text-muted)";
-  const typeColor = EVENT_TYPE_COLORS[event.type] || "var(--cc-text-muted)";
-  const label = EVENT_TYPE_LABELS[event.type] || event.type.toUpperCase();
+function getAgentDisplayName(agentId: string): string {
+  const lower = agentId.toLowerCase();
+  for (const [key, val] of Object.entries(AGENT_DISPLAY_NAMES)) {
+    if (lower.includes(key)) return val;
+  }
+  return agentId;
+}
 
-  const content = useMemo(() => {
-    const p = event.payload;
-    if (event.type === "agent_thinking") return String(p?.text || p?.content || "");
-    if (event.type === "agent_response") return String(p?.content || p?.text || "");
-    if (event.type === "finding_created")
-      return `[${(p as { severity?: string })?.severity?.toUpperCase()}] ${(p as { title?: string })?.title || ""}`;
-    if (event.type === "proposal_created") return String((p as { title?: string })?.title || "");
-    if (event.type === "vote_cast")
-      return `${(p as { vote_type?: string })?.vote_type?.toUpperCase()} on proposal`;
-    if (event.type === "phase_started" || event.type === "phase_completed")
-      return `${event.phase || ""}`;
-    return JSON.stringify(p).slice(0, 120);
-  }, [event]);
+function getAgentBarKey(agentId: string): string {
+  const lower = agentId.toLowerCase();
+  for (const [key, val] of Object.entries(AGENT_SHORTKEYS)) {
+    if (lower.includes(key)) return val;
+  }
+  return "system";
+}
+
+// Map event types to mockup badge styles
+function getEventBadge(type: string): { label: string; bgColor: string; textColor: string } {
+  switch (type) {
+    case "finding_created":
+      return { label: "FINDING", bgColor: "rgba(255,107,107,0.15)", textColor: "var(--cc-red)" };
+    case "proposal_created":
+      return { label: "PROPOSAL", bgColor: "rgba(108,92,231,0.2)", textColor: "var(--cc-accent)" };
+    case "vote_cast":
+      return { label: "VOTE", bgColor: "rgba(0,214,143,0.15)", textColor: "var(--cc-green)" };
+    case "agent_thinking":
+      return { label: "THINKING", bgColor: "rgba(255,217,61,0.15)", textColor: "var(--cc-yellow)" };
+    case "agent_response":
+      return { label: "RESPONSE", bgColor: "rgba(78,205,196,0.15)", textColor: "var(--cc-blue)" };
+    case "phase_started":
+    case "phase_completed":
+      return { label: "PHASE", bgColor: "rgba(136,136,160,0.15)", textColor: "var(--cc-text-muted)" };
+    case "consensus_reached":
+      return { label: "CONSENSUS", bgColor: "rgba(0,214,143,0.2)", textColor: "var(--cc-green)" };
+    case "human_review_requested":
+      return { label: "REVIEW", bgColor: "rgba(255,150,0,0.15)", textColor: "#ff9500" };
+    case "error":
+      return { label: "ERROR", bgColor: "rgba(255,107,107,0.25)", textColor: "var(--cc-red)" };
+    default:
+      return { label: type.toUpperCase().replace(/_/g, " "), bgColor: "rgba(136,136,160,0.15)", textColor: "var(--cc-text-muted)" };
+  }
+}
+
+// Get bubble style based on event type
+function getBubbleStyle(type: string): { bg: string; border: string } {
+  switch (type) {
+    case "finding_created":
+      return { bg: "rgba(255,107,107,0.04)", border: "rgba(255,107,107,0.2)" };
+    case "proposal_created":
+      return { bg: "rgba(108,92,231,0.04)", border: "rgba(108,92,231,0.2)" };
+    case "agent_response":
+      if (type === "agent_response") return { bg: "transparent", border: "var(--cc-border)" };
+      return { bg: "transparent", border: "var(--cc-border)" };
+    default:
+      return { bg: "transparent", border: "var(--cc-border)" };
+  }
+}
+
+function getEventContent(event: Event): string {
+  // Backend sends "content" (string) + "structured" (dict)
+  // Frontend Event type supports both "payload" and "content"/"structured"
+  const text = event.content || "";
+  const p = event.payload || event.structured || {};
+  const eventType = event.type || event.event_type || "";
+
+  if (text) return text;
+
+  if (eventType === "agent_thinking") return String(p?.text || p?.content || "Thinking...");
+  if (eventType === "agent_response" || eventType === "agent_speaking") return String(p?.content || p?.text || "");
+  if (eventType === "finding_created" || eventType === "finding_emitted")
+    return `[${(p as Record<string, string>)?.severity?.toUpperCase?.() || "INFO"}] ${(p as Record<string, string>)?.title || (p as Record<string, string>)?.content || ""}`;
+  if (eventType === "proposal_created") return String((p as Record<string, string>)?.title || "");
+  if (eventType === "vote_cast")
+    return `${(p as Record<string, string>)?.vote_type?.toUpperCase?.() || "VOTE"} on proposal`;
+  if (eventType === "phase_started" || eventType === "phase_completed")
+    return `Phase: ${event.phase || ""}`;
+
+  try {
+    const s = JSON.stringify(p);
+    return s && s !== "{}" ? s.slice(0, 120) : eventType || "Event";
+  } catch {
+    return eventType || "Event";
+  }
+}
+
+const FILTER_BUTTONS = [
+  { key: "all", label: "All" },
+  { key: "finding_created", label: "Findings" },
+  { key: "proposal_created", label: "Proposals" },
+  { key: "agent_response", label: "Challenges" },
+  { key: "vote_cast", label: "Votes" },
+];
+
+function EventBubble({ event }: { event: Event }) {
+  const agentKey = event.agent_id || event.agent || "";
+  const eventType = event.type || event.event_type || "";
+  const agentColor = agentKey && agentKey !== "system" ? getAgentColor(agentKey) : "var(--cc-text-muted)";
+  const agentName = agentKey && agentKey !== "system" ? getAgentDisplayName(agentKey) : "System";
+  const badge = getEventBadge(eventType);
+  const bubbleStyle = getBubbleStyle(eventType);
+  const content = getEventContent(event);
 
   const time = new Date(event.timestamp).toLocaleTimeString("en-US", {
     hour12: false,
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit",
   });
 
   return (
     <div
-      className="flex gap-2 px-3 py-2 hover:bg-white/5 transition-colors border-l-2 group"
-      style={{ borderLeftColor: event.agent_id ? agentColor : "transparent" }}
+      className="flex gap-3 rounded-[10px] border transition-all duration-200 animate-fade-in"
+      style={{
+        backgroundColor: bubbleStyle.bg || "var(--cc-bg-card)",
+        borderColor: bubbleStyle.border,
+        padding: "12px 16px",
+      }}
     >
-      {/* Time */}
-      <span
-        className="text-xs shrink-0 mt-0.5 w-16"
-        style={{ color: "var(--cc-text-muted)", fontFamily: "var(--font-geist-mono)" }}
-      >
-        {time}
-      </span>
-
-      {/* Type badge */}
-      <span
-        className="text-xs font-bold shrink-0 mt-0.5 w-12"
-        style={{ color: typeColor, fontFamily: "var(--font-geist-mono)" }}
-      >
-        {label}
-      </span>
-
-      {/* Agent */}
-      {event.agent_id && (
-        <span
-          className="text-xs shrink-0 mt-0.5 w-20 truncate"
-          style={{ color: agentColor }}
-        >
-          {event.agent_id}
-        </span>
-      )}
+      {/* Color bar */}
+      <div
+        className="w-[3px] rounded-sm shrink-0 self-stretch"
+        style={{
+          backgroundColor: agentKey && agentKey !== "system" ? agentColor : "var(--cc-text-muted)",
+        }}
+      />
 
       {/* Content */}
-      <span
-        className="text-xs flex-1 leading-relaxed"
-        style={{ color: "var(--cc-text)" }}
-      >
-        {content}
-      </span>
+      <div className="flex-1 min-w-0">
+        {/* Header */}
+        <div className="flex items-center gap-2 mb-1.5">
+          <span
+            className="text-xs font-semibold"
+            style={{ color: agentKey && agentKey !== "system" ? agentColor : "var(--cc-text-muted)" }}
+          >
+            {agentName}
+          </span>
+          <span
+            className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase"
+            style={{
+              backgroundColor: badge.bgColor,
+              color: badge.textColor,
+            }}
+          >
+            {badge.label}
+          </span>
+          <span
+            className="text-[10px] font-mono ml-auto"
+            style={{ color: "var(--cc-text-muted)" }}
+          >
+            {time}
+          </span>
+        </div>
+        {/* Event text */}
+        <div
+          className="text-[13px] leading-relaxed"
+          style={{ color: "var(--cc-text)" }}
+        >
+          {content}
+        </div>
+      </div>
     </div>
   );
 }
@@ -115,17 +184,6 @@ function EventItem({ event }: { event: Event }) {
 interface DebateFeedProps {
   events: Event[];
 }
-
-const EVENT_TYPES = [
-  "all",
-  "agent_thinking",
-  "agent_response",
-  "finding_created",
-  "proposal_created",
-  "vote_cast",
-  "phase_started",
-  "error",
-];
 
 export function DebateFeed({ events }: DebateFeedProps) {
   const [search, setSearch] = useState("");
@@ -141,14 +199,15 @@ export function DebateFeed({ events }: DebateFeedProps) {
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
-      if (typeFilter !== "all" && e.type !== typeFilter) return false;
+      const eType = e.type || e.event_type || "";
+      if (typeFilter !== "all" && eType !== typeFilter) return false;
       if (search) {
         const s = search.toLowerCase();
-        const p = JSON.stringify(e.payload).toLowerCase();
+        const contentStr = (e.content || JSON.stringify(e.payload || e.structured || "") || "").toLowerCase();
         return (
-          e.type.includes(s) ||
-          (e.agent_id || "").toLowerCase().includes(s) ||
-          p.includes(s)
+          eType.includes(s) ||
+          (e.agent_id || e.agent || "").toLowerCase().includes(s) ||
+          contentStr.includes(s)
         );
       }
       return true;
@@ -156,91 +215,55 @@ export function DebateFeed({ events }: DebateFeedProps) {
   }, [events, search, typeFilter]);
 
   return (
-    <div
-      className="flex flex-col h-full rounded-lg border overflow-hidden"
-      style={{
-        backgroundColor: "var(--cc-bg-card)",
-        borderColor: "var(--cc-border)",
-      }}
-    >
-      {/* Toolbar */}
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Search + filter bar (sticky) */}
       <div
-        className="flex items-center gap-2 px-3 py-2 border-b"
-        style={{ borderColor: "var(--cc-border)" }}
+        className="flex items-center gap-3 p-2 rounded-lg mb-1 sticky top-0 z-10"
+        style={{ backgroundColor: "var(--cc-bg-card)" }}
       >
-        <div className="relative flex-1">
-          <Search
-            className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3"
-            style={{ color: "var(--cc-text-muted)" }}
-          />
-          <Input
-            placeholder="Filter events…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="h-7 pl-7 text-xs"
+        <input
+          className="flex-1 px-3 py-1.5 text-xs rounded-md border outline-none transition-all duration-200"
+          style={{
+            backgroundColor: "var(--cc-bg)",
+            borderColor: "var(--cc-border)",
+            color: "var(--cc-text)",
+          }}
+          placeholder="Search debate events..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {FILTER_BUTTONS.map((btn) => (
+          <button
+            key={btn.key}
+            onClick={() => setTypeFilter(btn.key)}
+            className="px-2.5 py-1 text-[11px] rounded-md border cursor-pointer transition-all duration-200"
             style={{
               backgroundColor: "var(--cc-bg)",
-              borderColor: "var(--cc-border)",
-              color: "var(--cc-text)",
-            }}
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          <Filter className="w-3 h-3" style={{ color: "var(--cc-text-muted)" }} />
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="text-xs h-7 px-2 rounded border outline-none"
-            style={{
-              backgroundColor: "var(--cc-bg)",
-              borderColor: "var(--cc-border)",
-              color: "var(--cc-text)",
+              borderColor: typeFilter === btn.key ? "var(--cc-accent)" : "var(--cc-border)",
+              color: typeFilter === btn.key ? "var(--cc-accent)" : "var(--cc-text-muted)",
             }}
           >
-            {EVENT_TYPES.map((t) => (
-              <option key={t} value={t}>
-                {t === "all" ? "All" : EVENT_TYPE_LABELS[t] || t}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button
-          onClick={() => setAutoScroll(!autoScroll)}
-          className="text-xs px-2 py-1 rounded transition-colors"
-          style={{
-            backgroundColor: autoScroll ? "var(--cc-accent)" : "var(--cc-border)",
-            color: autoScroll ? "white" : "var(--cc-text-muted)",
-          }}
-        >
-          Auto
-        </button>
-        <Badge
-          variant="outline"
-          className="text-xs"
-          style={{ color: "var(--cc-text-muted)", borderColor: "var(--cc-border)" }}
-        >
-          {filtered.length}
-        </Badge>
+            {btn.label}
+          </button>
+        ))}
       </div>
 
-      {/* Event list */}
-      <ScrollArea className="flex-1">
+      {/* Events list */}
+      <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1">
         {filtered.length === 0 ? (
           <div
             className="py-8 text-center text-sm"
             style={{ color: "var(--cc-text-muted)" }}
           >
-            No events yet…
+            No events yet...
           </div>
         ) : (
-          <div className="divide-y" style={{ borderColor: "var(--cc-border)" }}>
-            {filtered.map((event) => (
-              <EventItem key={event.id} event={event} />
-            ))}
-            <div ref={bottomRef} />
-          </div>
+          filtered.map((event, idx) => (
+            <EventBubble key={event.id || event.event_id || `event-${idx}`} event={event} />
+          ))
         )}
-      </ScrollArea>
+        <div ref={bottomRef} />
+      </div>
     </div>
   );
 }
