@@ -33,12 +33,15 @@ const TOPOLOGIES = [
   { value: "adversarial", label: "Adversarial" },
   { value: "collaborative", label: "Collaborative" },
   { value: "socratic", label: "Socratic" },
+  { value: "open_floor", label: "Open Floor" },
+  { value: "panel", label: "Panel" },
 ];
 
 const PROVIDERS = [
-  { value: "openai", label: "OpenAI GPT-4o" },
-  { value: "anthropic", label: "Claude Sonnet" },
-  { value: "gemini", label: "Gemini Pro" },
+  { value: "openai", label: "OpenAI GPT-5.4" },
+  { value: "anthropic", label: "Anthropic Claude" },
+  { value: "gemini", label: "Google Gemini" },
+  { value: "ollama", label: "Ollama (local)" },
 ];
 
 const BUDGETS = [
@@ -186,7 +189,7 @@ export default function HomePage() {
   const completedRuns = runs.filter((r) => r.status === "completed");
   const totalSpend = runs.reduce((s, r) => s + r.total_cost, 0);
   const avgCost = totalAnalyses > 0 ? totalSpend / totalAnalyses : 0;
-  const totalFindings = runs.reduce((s, r) => s + ((r as any).findings_count || 0), 0);
+  const totalFindings = runs.reduce((s, r) => s + (r.finding_count || 0), 0);
 
   function formatDuration(start?: string, end?: string): string {
     if (!start || !end) return "--";
@@ -269,7 +272,7 @@ export default function HomePage() {
 
         {/* Quick config chips */}
         <div className="flex gap-4 justify-center flex-wrap max-w-[800px] mx-auto">
-          <div className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
+          <div title="Which LLM model powers the agents" className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
             Provider:
             <select
               value={provider}
@@ -281,7 +284,7 @@ export default function HomePage() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
+          <div title="How agents structure their debate (Adversarial: Skeptic challenges every proposal)" className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
             Topology:
             <select
               value={topology}
@@ -293,7 +296,7 @@ export default function HomePage() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
+          <div title="Number of debate rounds (more rounds = deeper analysis, higher cost)" className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
             Rounds:
             <select
               value={String(rounds)}
@@ -305,7 +308,7 @@ export default function HomePage() {
               ))}
             </select>
           </div>
-          <label className="flex items-center gap-1.5 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200 cursor-pointer">
+          <label title="Pause after RFC generation so you can review, challenge findings, or override votes before finalizing" className="flex items-center gap-1.5 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200 cursor-pointer">
             <input
               type="checkbox"
               checked={hitl}
@@ -314,7 +317,7 @@ export default function HomePage() {
             />
             Human Review
           </label>
-          <div className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
+          <div title="Maximum spend limit in USD — pipeline pauses if cost exceeds this" className="flex items-center gap-2 py-2 px-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-lg text-[13px] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-text)] transition-all duration-200">
             Budget:
             <select
               value={budget}

@@ -167,6 +167,9 @@ export default function DebatePage() {
     };
   }, [events]);
 
+  const configOverrides = (run as any)?.config_overrides || {};
+  const topologyLabel = (configOverrides.topology || "adversarial").replace("_", " ");
+
   const statusPill = STATUS_PILL_STYLES[run?.status || "pending"] || STATUS_PILL_STYLES.pending;
 
   if (loading) {
@@ -239,12 +242,18 @@ export default function DebatePage() {
           </span>
         </div>
 
-        {/* Center: phase indicator + round */}
+        {/* Center: phase indicator + topology + round */}
         <div className="flex items-center gap-5">
           <PhaseIndicator
             currentPhase={phase}
             completedPhases={completedPhases}
           />
+          <span
+            className="text-[13px] font-semibold capitalize"
+            style={{ color: "var(--cc-text-muted)" }}
+          >
+            {topologyLabel}
+          </span>
           <span
             className="text-[13px] font-semibold"
             style={{ color: "var(--cc-accent)" }}
@@ -262,6 +271,11 @@ export default function DebatePage() {
             {elapsed}
           </span>
           <CostMeter cost={cost} budgetLimit={undefined} />
+          {configOverrides.budget > 0 && (
+            <span className="text-xs text-[var(--cc-text-muted)]">
+              Budget: ${configOverrides.budget}
+            </span>
+          )}
           <div className="flex gap-1">
             {providers.map((p) => (
               <span

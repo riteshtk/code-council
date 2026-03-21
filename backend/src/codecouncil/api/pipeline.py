@@ -534,13 +534,30 @@ async def run_real_council(run: dict, runs_store: dict, *, session_factory=None)
         run["proposals"] = proposals
 
         # Multi-round debate
-        max_rounds = run.get("config_overrides", {}).get("rounds", 3)
+        overrides = run.get("config_overrides", {})
+        max_rounds = overrides.get("rounds", 3)
+        topology_name = overrides.get("topology", "adversarial")
+        budget_limit = float(overrides.get("budget", 0))
+        hitl_enabled = overrides.get("hitl", False)
         debate_rounds = []
         challenge_text = ""
         evidence_text = ""
         visionary_response_text = ""
 
+        emit("system", "phase_started", f"Debate phase: {topology_name.replace('_', ' ').title()} topology, {max_rounds} rounds", "debate")
+
         for round_num in range(1, max_rounds + 1):
+            # Budget check before each round
+            if budget_limit > 0:
+                current_cost = sum(e.get("metadata", {}).get("cost_usd", 0) for e in run["events"])
+                if current_cost >= budget_limit:
+                    emit("system", "budget_exceeded", f"Budget limit ${budget_limit} reached (spent ${current_cost:.2f})", run["phase"])
+                    run["status"] = "failed"
+                    run["phase"] = "error"
+                    if session_factory:
+                        await _update_run_phase(session_factory, run_id, "failed", "error")
+                    return
+
             emit("system", "round_started", f"Round {round_num}/{max_rounds}", "debate",
                  structured={"round": round_num, "max_rounds": max_rounds})
 
