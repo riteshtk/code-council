@@ -23,19 +23,49 @@ interface RunState {
   disconnectWebSocket: () => void;
 }
 
+// Map backend phase names to frontend Phase type
+function normalizePhase(phase: string | undefined): Phase | null {
+  if (!phase) return null;
+  const map: Record<string, Phase> = {
+    ingesting: "ingestion", ingestion: "ingestion",
+    analysing: "analysis", analysis: "analysis", analyzing: "analysis",
+    opening: "debate", debating: "debate", debate: "debate",
+    voting: "synthesis", synthesis: "synthesis",
+    scribing: "review", review: "review",
+    output: "output", done: "output", finalise: "output",
+    init: "ingestion", error: "output",
+  };
+  return map[phase.toLowerCase()] || (phase as Phase);
+}
+
 function parseEventPayload(
   state: Omit<RunState, "setRun" | "clearRun" | "addEvent" | "setWsState" | "connectWebSocket" | "disconnectWebSocket">,
   event: Event
 ): Partial<RunState> {
   const updates: Partial<RunState> = {};
 
-  const eventType = event.type || event.event_type || "";
-  const payload = event.payload || event.structured || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const e = event as any;
+  const eventType = e.type || e.event_type || "";
+  const payload = e.payload || e.structured || {};
 
   switch (eventType) {
     case "phase_started":
-    case "phase_completed":
-      if (event.phase) updates.phase = event.phase as Phase;
+    case "phase_completed": {
+      const mapped = normalizePhase(e.phase);
+      if (mapped) updates.phase = mapped;
+      break;
+    }
+    case "run_completed":
+      // Update run status so UI knows it's done
+      if (state.run) {
+        updates.run = { ...state.run, status: "completed" } as RunSummary;
+      }
+      break;
+    case "run_failed":
+      if (state.run) {
+        updates.run = { ...state.run, status: "failed" } as RunSummary;
+      }
       break;
     case "finding_created":
     case "finding_emitted": {

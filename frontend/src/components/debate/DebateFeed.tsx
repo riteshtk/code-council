@@ -38,6 +38,7 @@ function getAgentBarKey(agentId: string): string {
 function getEventBadge(type: string): { label: string; bgColor: string; textColor: string } {
   switch (type) {
     case "finding_created":
+    case "finding_emitted":
       return { label: "FINDING", bgColor: "rgba(255,107,107,0.15)", textColor: "var(--cc-red)" };
     case "proposal_created":
       return { label: "PROPOSAL", bgColor: "rgba(108,92,231,0.2)", textColor: "var(--cc-accent)" };
@@ -65,6 +66,7 @@ function getEventBadge(type: string): { label: string; bgColor: string; textColo
 function getBubbleStyle(type: string): { bg: string; border: string } {
   switch (type) {
     case "finding_created":
+    case "finding_emitted":
       return { bg: "rgba(255,107,107,0.04)", border: "rgba(255,107,107,0.2)" };
     case "proposal_created":
       return { bg: "rgba(108,92,231,0.04)", border: "rgba(108,92,231,0.2)" };
@@ -104,11 +106,11 @@ function getEventContent(event: Event): string {
 }
 
 const FILTER_BUTTONS = [
-  { key: "all", label: "All" },
-  { key: "finding_created", label: "Findings" },
-  { key: "proposal_created", label: "Proposals" },
-  { key: "agent_response", label: "Challenges" },
-  { key: "vote_cast", label: "Votes" },
+  { key: "all", label: "All", types: [] as string[] },
+  { key: "findings", label: "Findings", types: ["finding_created", "finding_emitted"] },
+  { key: "proposals", label: "Proposals", types: ["proposal_created"] },
+  { key: "challenges", label: "Challenges", types: ["agent_response", "agent_speaking"] },
+  { key: "votes", label: "Votes", types: ["vote_cast"] },
 ];
 
 function EventBubble({ event }: { event: Event }) {
@@ -200,7 +202,10 @@ export function DebateFeed({ events }: DebateFeedProps) {
   const filtered = useMemo(() => {
     return events.filter((e) => {
       const eType = e.type || e.event_type || "";
-      if (typeFilter !== "all" && eType !== typeFilter) return false;
+      if (typeFilter !== "all") {
+        const filterDef = FILTER_BUTTONS.find((b) => b.key === typeFilter);
+        if (filterDef && filterDef.types.length > 0 && !filterDef.types.includes(eType)) return false;
+      }
       if (search) {
         const s = search.toLowerCase();
         const contentStr = (e.content || JSON.stringify(e.payload || e.structured || "") || "").toLowerCase();
