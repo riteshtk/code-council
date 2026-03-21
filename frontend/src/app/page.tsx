@@ -110,6 +110,8 @@ export default function HomePage() {
   const router = useRouter();
   const [sourceTab, setSourceTab] = useState("github");
   const [repoUrl, setRepoUrl] = useState("");
+  const [repoUrl2, setRepoUrl2] = useState("");
+  const [multiRepo, setMultiRepo] = useState(false);
   const [localPath, setLocalPath] = useState("");
   const [provider, setProvider] = useState("openai");
   const [topology, setTopology] = useState("adversarial");
@@ -148,6 +150,27 @@ export default function HomePage() {
   }
 
   async function handleAnalyse() {
+    if (multiRepo) {
+      if (!repoUrl.trim() || !repoUrl2.trim()) {
+        toast.error("Please enter both repository URLs");
+        return;
+      }
+      setSubmitting(true);
+      try {
+        await Promise.all([
+          createRun({ repo_url: repoUrl, provider, topology, rounds, hitl, budget: parseFloat(budget) || undefined }),
+          createRun({ repo_url: repoUrl2, provider, topology, rounds, hitl, budget: parseFloat(budget) || undefined }),
+        ]);
+        toast.success("Both analyses started! View them in Sessions.");
+        router.push("/sessions");
+      } catch (e) {
+        toast.error(`Failed: ${e}`);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     const url = sourceTab === "local" ? localPath : repoUrl;
     if (!url.trim()) {
       toast.error("Please enter a repository URL or path");
@@ -220,27 +243,74 @@ export default function HomePage() {
           Submit a repository. Four AI agents will analyse, debate, and produce an institutional-grade RFC.
         </p>
 
-        {/* Source selector */}
-        <div className="flex max-w-[700px] mx-auto mb-3 rounded-[10px] overflow-hidden border border-[var(--cc-border)] bg-[var(--cc-bg-card)]">
-          {SOURCE_TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => setSourceTab(id)}
-              className={cn(
-                "flex-1 py-3 px-4 text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap",
-                sourceTab === id
-                  ? "bg-[var(--cc-accent)] text-white"
-                  : "text-[var(--cc-text-muted)] hover:bg-[var(--cc-bg-hover)] hover:text-[var(--cc-text)]"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+        {/* Mode toggle: Single Repo / Compare Repos */}
+        <div className="flex justify-center gap-2 mb-3">
+          <button
+            onClick={() => setMultiRepo(false)}
+            className={cn(
+              "px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all duration-200",
+              !multiRepo
+                ? "bg-[var(--cc-accent)] text-white"
+                : "bg-[var(--cc-bg-card)] border border-[var(--cc-border)] text-[var(--cc-text-muted)] hover:text-[var(--cc-text)]"
+            )}
+          >
+            Single Repo
+          </button>
+          <button
+            onClick={() => setMultiRepo(true)}
+            className={cn(
+              "px-3 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all duration-200",
+              multiRepo
+                ? "bg-[var(--cc-accent)] text-white"
+                : "bg-[var(--cc-bg-card)] border border-[var(--cc-border)] text-[var(--cc-text-muted)] hover:text-[var(--cc-text)]"
+            )}
+          >
+            Compare Repos
+          </button>
         </div>
 
-        {/* Input row */}
+        {/* Source selector */}
+        {!multiRepo && (
+          <div className="flex max-w-[700px] mx-auto mb-3 rounded-[10px] overflow-hidden border border-[var(--cc-border)] bg-[var(--cc-bg-card)]">
+            {SOURCE_TABS.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setSourceTab(id)}
+                className={cn(
+                  "flex-1 py-3 px-4 text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap",
+                  sourceTab === id
+                    ? "bg-[var(--cc-accent)] text-white"
+                    : "text-[var(--cc-text-muted)] hover:bg-[var(--cc-bg-hover)] hover:text-[var(--cc-text)]"
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Multi-repo: first input */}
+        {multiRepo && (
+          <div className="flex gap-3 max-w-[700px] mx-auto mb-3">
+            <input
+              placeholder="First repo URL — https://github.com/owner/repo"
+              value={repoUrl}
+              onChange={(e) => setRepoUrl(e.target.value)}
+              className="flex-1 py-3 px-5 rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-bg-card)] text-[15px] text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:border-[var(--cc-accent)] focus:shadow-[0_0_0_3px_var(--cc-accent-glow)] outline-none transition-all duration-200"
+            />
+          </div>
+        )}
+
+        {/* Input row (single-repo input OR second multi-repo input + button) */}
         <div className="flex gap-3 max-w-[700px] mx-auto mb-6">
-          {sourceTab === "local" ? (
+          {multiRepo ? (
+            <input
+              placeholder="Second repo URL — https://github.com/owner/repo2"
+              value={repoUrl2}
+              onChange={(e) => setRepoUrl2(e.target.value)}
+              className="flex-1 py-3 px-5 rounded-[10px] border border-[var(--cc-border)] bg-[var(--cc-bg-card)] text-[15px] text-[var(--cc-text)] placeholder:text-[var(--cc-text-muted)] focus:border-[var(--cc-accent)] focus:shadow-[0_0_0_3px_var(--cc-accent-glow)] outline-none transition-all duration-200"
+            />
+          ) : sourceTab === "local" ? (
             <input
               placeholder="/path/to/your/project"
               value={localPath}
@@ -264,6 +334,8 @@ export default function HomePage() {
               <span className="flex items-center gap-2">
                 <Loader2 className="w-4 h-4 animate-spin" /> Starting...
               </span>
+            ) : multiRepo ? (
+              "Compare"
             ) : (
               "Analyse"
             )}

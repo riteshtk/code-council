@@ -27,10 +27,12 @@ import {
   Server,
   MonitorSpeaker,
   Brain,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { testProvider } from "@/lib/api";
+import { testProvider, createAgent, deleteAgent, listAgents } from "@/lib/api";
 import { AGENTS, AGENT_HANDLES } from "@/lib/constants";
 
 
@@ -250,9 +252,73 @@ export default function ConfigPage() {
   const [localConfig, setLocalConfig] = useState(config);
   const [saving, setSaving] = useState(false);
   const [nextRunOnly, setNextRunOnly] = useState(false);
+  const [showAgentForm, setShowAgentForm] = useState(false);
+  const [customAgents, setCustomAgents] = useState<Record<string, unknown>[]>([]);
+  const [newAgent, setNewAgent] = useState({
+    handle: "",
+    name: "",
+    role: "",
+    color: "#ff9f43",
+    persona_prompt: "",
+    focus_areas: "",
+    debate_role: "analyst",
+    temperature: 0.3,
+    vote_weight: 1.0,
+  });
 
-  useEffect(() => { loadConfig(); }, []);
+  useEffect(() => { loadConfig(); loadCustomAgents(); }, []);
   useEffect(() => { setLocalConfig(config); }, [config]);
+
+  async function loadCustomAgents() {
+    try {
+      const agents = (await listAgents()) as unknown as Record<string, unknown>[];
+      setCustomAgents(agents.filter((a) => a.is_custom));
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleCreateAgent() {
+    if (!newAgent.handle.trim() || !newAgent.name.trim()) {
+      toast.error("Handle and Name are required");
+      return;
+    }
+    try {
+      await createAgent({
+        ...newAgent,
+        focus_areas: newAgent.focus_areas
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+      });
+      toast.success(`Agent "${newAgent.name}" created`);
+      setShowAgentForm(false);
+      setNewAgent({
+        handle: "",
+        name: "",
+        role: "",
+        color: "#ff9f43",
+        persona_prompt: "",
+        focus_areas: "",
+        debate_role: "analyst",
+        temperature: 0.3,
+        vote_weight: 1.0,
+      });
+      loadCustomAgents();
+    } catch (e) {
+      toast.error(`Failed to create agent: ${e}`);
+    }
+  }
+
+  async function handleDeleteAgent(handle: string) {
+    try {
+      await deleteAgent(handle);
+      toast.success("Agent deleted");
+      loadCustomAgents();
+    } catch (e) {
+      toast.error(`Failed to delete agent: ${e}`);
+    }
+  }
 
   const lc = (localConfig ?? {}) as Record<string, unknown>;
   const council = (lc.council ?? {}) as Record<string, unknown>;
@@ -476,6 +542,160 @@ export default function ConfigPage() {
                 />
               );
             })}
+
+            {/* Custom Agents */}
+            {customAgents.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-[var(--cc-border)]">
+                <h3 className="text-sm font-semibold text-[var(--cc-text)] mb-3">Custom Agents</h3>
+                <div className="flex flex-col gap-3">
+                  {customAgents.map((agent) => (
+                    <div
+                      key={agent.handle as string}
+                      className="flex items-center justify-between px-5 py-4 bg-[var(--cc-bg-card)] border border-[var(--cc-border)] rounded-xl"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-lg flex items-center justify-center text-sm font-bold text-white shrink-0"
+                          style={{ backgroundColor: (agent.color as string) || "#ff9f43" }}
+                        >
+                          {((agent.name as string) || "??").slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="text-[15px] font-semibold text-[var(--cc-text)]">{agent.name as string}</div>
+                          <div className="text-xs text-[var(--cc-text-muted)]">
+                            {agent.role as string} &middot; {agent.debate_role as string} &middot; temp {(agent.temperature as number)?.toFixed(1) ?? "0.3"}
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAgent(agent.handle as string)}
+                        className="p-2 rounded-md text-[var(--cc-text-muted)] hover:text-[var(--cc-red)] hover:bg-[var(--cc-red-muted)] cursor-pointer transition-all duration-200"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Create Custom Agent */}
+            <div className="mt-6 pt-6 border-t border-[var(--cc-border)]">
+              <h3 className="text-sm font-semibold text-[var(--cc-text)] mb-4 flex items-center gap-2">
+                <Plus className="w-4 h-4 text-[var(--cc-accent)]" />
+                Create Custom Agent
+              </h3>
+
+              {showAgentForm ? (
+                <div className="card-premium p-5 space-y-4 animate-fade-in">
+                  <div className="grid grid-cols-2 gap-4">
+                    <FieldGroup label="Handle (unique ID)">
+                      <input
+                        value={newAgent.handle}
+                        onChange={(e) => setNewAgent({ ...newAgent, handle: e.target.value.toLowerCase().replace(/\s/g, "-") })}
+                        placeholder="e.g. pragmatist"
+                        className="w-full py-2 px-3 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-[13px] text-[var(--cc-text)] outline-none focus:border-[var(--cc-accent)]"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Display Name">
+                      <input
+                        value={newAgent.name}
+                        onChange={(e) => setNewAgent({ ...newAgent, name: e.target.value })}
+                        placeholder="e.g. The Pragmatist"
+                        className="w-full py-2 px-3 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-[13px] text-[var(--cc-text)] outline-none focus:border-[var(--cc-accent)]"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Role">
+                      <input
+                        value={newAgent.role}
+                        onChange={(e) => setNewAgent({ ...newAgent, role: e.target.value })}
+                        placeholder="e.g. Sprint Planner"
+                        className="w-full py-2 px-3 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-[13px] text-[var(--cc-text)] outline-none focus:border-[var(--cc-accent)]"
+                      />
+                    </FieldGroup>
+                    <FieldGroup label="Color">
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="color"
+                          value={newAgent.color}
+                          onChange={(e) => setNewAgent({ ...newAgent, color: e.target.value })}
+                          className="w-8 h-8 rounded cursor-pointer border-none"
+                        />
+                        <input
+                          value={newAgent.color}
+                          onChange={(e) => setNewAgent({ ...newAgent, color: e.target.value })}
+                          placeholder="#ff9f43"
+                          className="flex-1 py-2 px-3 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-[13px] text-[var(--cc-text)] outline-none focus:border-[var(--cc-accent)] font-mono"
+                        />
+                      </div>
+                    </FieldGroup>
+                    <FieldGroup label="Debate Role">
+                      <select
+                        value={newAgent.debate_role}
+                        onChange={(e) => setNewAgent({ ...newAgent, debate_role: e.target.value })}
+                        className="w-full py-2 px-3 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-[13px] text-[var(--cc-text)] outline-none cursor-pointer focus:border-[var(--cc-accent)]"
+                      >
+                        <option value="analyst">Analyst</option>
+                        <option value="challenger">Challenger</option>
+                        <option value="proposer">Proposer</option>
+                      </select>
+                    </FieldGroup>
+                    <FieldGroup label="Temperature">
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={0}
+                          max={100}
+                          value={newAgent.temperature * 100}
+                          onChange={(e) => setNewAgent({ ...newAgent, temperature: Number(e.target.value) / 100 })}
+                          className="flex-1 accent-[var(--cc-accent)] cursor-pointer"
+                        />
+                        <span className="text-[13px] font-mono text-[var(--cc-accent)] min-w-[36px]">{newAgent.temperature.toFixed(1)}</span>
+                      </div>
+                    </FieldGroup>
+                  </div>
+                  <FieldGroup label="Persona Prompt">
+                    <textarea
+                      value={newAgent.persona_prompt}
+                      onChange={(e) => setNewAgent({ ...newAgent, persona_prompt: e.target.value })}
+                      rows={4}
+                      placeholder="You are the Pragmatist — you translate proposals into sprint-ready tickets..."
+                      className="w-full mt-1 min-h-[80px] p-3 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-lg text-xs font-mono leading-relaxed text-[var(--cc-text)] resize-y outline-none focus:border-[var(--cc-accent)] transition-all duration-200"
+                    />
+                  </FieldGroup>
+                  <FieldGroup label="Focus Areas (comma-separated)">
+                    <input
+                      value={newAgent.focus_areas}
+                      onChange={(e) => setNewAgent({ ...newAgent, focus_areas: e.target.value })}
+                      placeholder="sprint planning, effort estimation, ticket breakdown"
+                      className="w-full py-2 px-3 bg-[var(--cc-bg)] border border-[var(--cc-border)] rounded-md text-[13px] text-[var(--cc-text)] outline-none focus:border-[var(--cc-accent)]"
+                    />
+                  </FieldGroup>
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => setShowAgentForm(false)}
+                      className="px-4 py-2 rounded-lg border border-[var(--cc-border)] text-[var(--cc-text-muted)] text-[13px] font-medium cursor-pointer hover:border-[var(--cc-border-hover)] transition-all duration-200"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreateAgent}
+                      className="px-4 py-2 rounded-lg bg-[var(--cc-accent)] text-white text-[13px] font-semibold cursor-pointer hover:bg-[#5a4bd4] transition-all duration-200"
+                    >
+                      Create Agent
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowAgentForm(true)}
+                  className="w-full py-3 rounded-xl border-2 border-dashed border-[var(--cc-border)] text-[var(--cc-text-muted)] hover:border-[var(--cc-accent)] hover:text-[var(--cc-accent)] transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Custom Agent
+                </button>
+              )}
+            </div>
           </div>
         </TabsContent>
 

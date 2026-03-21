@@ -127,6 +127,14 @@ export async function listAgents(): Promise<AgentIdentity[]> {
   return Array.isArray(data) ? data : (data.agents || []);
 }
 
+export async function createAgent(agent: Record<string, unknown>): Promise<unknown> {
+  return apiFetch("/api/agents", { method: "POST", body: JSON.stringify(agent) });
+}
+
+export async function deleteAgent(handle: string): Promise<void> {
+  return apiFetch<void>(`/api/agents/${handle}`, { method: "DELETE" });
+}
+
 // Providers
 export async function listProviders(): Promise<string[]> {
   const data = await apiFetch<{ providers: unknown[] } | unknown[]>("/api/providers");
