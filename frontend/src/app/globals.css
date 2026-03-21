@@ -49,10 +49,45 @@
 }
 
 /* ═══════════════════════════════════════════
-   CodeCouncil — Cinematic Dark Theme Tokens
+   CodeCouncil — Light Mode (default)
    ═══════════════════════════════════════════ */
 
 :root {
+  --cc-bg: #f5f5fa;
+  --cc-bg-elevated: #ffffff;
+  --cc-bg-card: #ffffff;
+  --cc-bg-hover: #ededf5;
+  --cc-bg-active: #e0e0ee;
+  --cc-border: rgba(0, 0, 0, 0.08);
+  --cc-border-hover: rgba(0, 0, 0, 0.15);
+  --cc-border-focus: #6c5ce7;
+  --cc-text: #1a1a2e;
+  --cc-text-secondary: #555570;
+  --cc-text-muted: #8888a0;
+  --cc-accent: #5a4bd4;
+  --cc-accent-hover: #6c5ce7;
+  --cc-accent-muted: rgba(108, 92, 231, 0.10);
+  --cc-accent-glow: rgba(108, 92, 231, 0.15);
+  --cc-green: #00b377;
+  --cc-green-muted: rgba(0, 179, 119, 0.12);
+  --cc-red: #e54545;
+  --cc-red-muted: rgba(229, 69, 69, 0.10);
+  --cc-yellow: #d4a800;
+  --cc-yellow-muted: rgba(212, 168, 0, 0.10);
+  --cc-blue: #2ba89f;
+  --cc-blue-muted: rgba(43, 168, 159, 0.10);
+  --cc-archaeologist: #c4955a;
+  --cc-skeptic: #e54545;
+  --cc-visionary: #5a4bd4;
+  --cc-scribe: #2ba89f;
+  --radius: 0.75rem;
+}
+
+/* ═══════════════════════════════════════════
+   CodeCouncil — Dark Mode
+   ═══════════════════════════════════════════ */
+
+html.dark, .dark {
   --cc-bg: #08080d;
   --cc-bg-elevated: #0c0c14;
   --cc-bg-card: #10101c;
@@ -80,11 +115,10 @@
   --cc-skeptic: #ff6b6b;
   --cc-visionary: #6c5ce7;
   --cc-scribe: #4ecdc4;
-  --radius: 0.75rem;
 }
 
-/* Map shadcn variables to CodeCouncil dark theme */
-.dark, :root {
+/* Light mode shadcn mapping */
+:root {
   --background: var(--cc-bg);
   --foreground: var(--cc-text);
   --card: var(--cc-bg-card);
@@ -103,11 +137,46 @@
   --border: var(--cc-border);
   --input: var(--cc-border);
   --ring: var(--cc-accent);
-  --chart-1: #6c5ce7;
-  --chart-2: #00d68f;
-  --chart-3: #ff6b6b;
-  --chart-4: #ffd93d;
-  --chart-5: #4ecdc4;
+  --chart-1: var(--cc-accent);
+  --chart-2: var(--cc-green);
+  --chart-3: var(--cc-red);
+  --chart-4: var(--cc-yellow);
+  --chart-5: var(--cc-blue);
+  --sidebar: var(--cc-bg-elevated);
+  --sidebar-foreground: var(--cc-text);
+  --sidebar-primary: var(--cc-accent);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--cc-bg-hover);
+  --sidebar-accent-foreground: var(--cc-text);
+  --sidebar-border: var(--cc-border);
+  --sidebar-ring: var(--cc-accent);
+}
+
+/* Dark mode shadcn mapping */
+html.dark, .dark {
+  --background: var(--cc-bg);
+  --foreground: var(--cc-text);
+  --card: var(--cc-bg-card);
+  --card-foreground: var(--cc-text);
+  --popover: var(--cc-bg-card);
+  --popover-foreground: var(--cc-text);
+  --primary: var(--cc-accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--cc-bg-hover);
+  --secondary-foreground: var(--cc-text);
+  --muted: var(--cc-bg-hover);
+  --muted-foreground: var(--cc-text-muted);
+  --accent: var(--cc-bg-hover);
+  --accent-foreground: var(--cc-text);
+  --destructive: var(--cc-red);
+  --border: var(--cc-border);
+  --input: var(--cc-border);
+  --ring: var(--cc-accent);
+  --chart-1: var(--cc-accent);
+  --chart-2: var(--cc-green);
+  --chart-3: var(--cc-red);
+  --chart-4: var(--cc-yellow);
+  --chart-5: var(--cc-blue);
   --sidebar: var(--cc-bg-elevated);
   --sidebar-foreground: var(--cc-text);
   --sidebar-primary: var(--cc-accent);
@@ -128,6 +197,10 @@
   }
   html {
     @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
 
   /* Premium selection color */
@@ -142,8 +215,8 @@
    ═══════════════════════════════════════════ */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+::-webkit-scrollbar-thumb { background: var(--cc-border-hover); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--cc-text-muted); }
 
 /* ═══════════════════════════════════════════
    Global Input Styling
@@ -321,9 +394,14 @@ button[data-slot="button"][data-variant="ghost"]:hover {
    Utility Classes
    ═══════════════════════════════════════════ */
 .glass {
-  background: rgba(12, 12, 20, 0.85);
+  background: var(--cc-bg-elevated);
+  opacity: 0.95;
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+html.dark .glass {
+  background: rgba(12, 12, 20, 0.85);
 }
 
 .gradient-text {
@@ -345,7 +423,10 @@ button[data-slot="button"][data-variant="ghost"]:hover {
 }
 .hover-lift:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), 0 0 1px rgba(255,255,255,0.05);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+}
+html.dark .hover-lift:hover {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
 .glow-accent {
@@ -364,6 +445,9 @@ button[data-slot="button"][data-variant="ghost"]:hover {
 }
 .card-premium:hover {
   border-color: var(--cc-border-hover);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+}
+html.dark .card-premium:hover {
   box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
