@@ -206,7 +206,7 @@ export default function HomePage() {
 
   // Parse repo display name
   function repoDisplay(run: RunSummary) {
-    const url = run.repo?.url || run.repo?.local_path || run.id;
+    const url = run.repo?.url || run.repo?.local_path || run.id || "unknown";
     const match = url.match(/github\.com\/([^/]+)\/([^/]+)/);
     if (match) return { org: match[1] + "/", name: match[2] };
     return { org: "", name: url };
