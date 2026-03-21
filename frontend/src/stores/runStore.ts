@@ -18,6 +18,8 @@ interface RunState {
   setRun: (run: RunSummary) => void;
   clearRun: () => void;
   addEvent: (event: Event) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  loadFullRun: (runData: any) => void;
   setWsState: (state: WSState) => void;
   connectWebSocket: (runId: string) => void;
   disconnectWebSocket: () => void;
@@ -128,6 +130,21 @@ export const useRunStore = create<RunState>((set, get) => ({
       runId: run.id,
       phase: (run.phase as Phase) || null,
     }),
+
+  // Load a full run response directly — sets events, findings, proposals, votes all at once
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  loadFullRun: (runData: any) => {
+    const phase = normalizePhase(runData.phase) || null;
+    set({
+      run: runData as RunSummary,
+      runId: runData.id,
+      phase,
+      events: (runData.events || []) as Event[],
+      findings: (runData.findings || []) as Finding[],
+      proposals: (runData.proposals || []) as Proposal[],
+      votes: (runData.votes || []) as Vote[],
+    });
+  },
 
   clearRun: () => {
     const { wsManager } = get();

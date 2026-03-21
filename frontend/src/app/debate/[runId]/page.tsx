@@ -46,6 +46,7 @@ export default function DebatePage() {
     setRun,
     clearRun,
     addEvent,
+    loadFullRun,
     phase,
     events,
     findings,
@@ -64,13 +65,9 @@ export default function DebatePage() {
     setError(null);
     getRun(runId)
       .then((r) => {
-        setRun(r);
-        // Replay existing events into the store — this populates findings, proposals, votes
-        if (r.events && Array.isArray(r.events)) {
-          for (const event of r.events) {
-            addEvent(event);
-          }
-        }
+        // Load everything directly into the store — events, findings, proposals, votes
+        loadFullRun(r);
+
         // Connect WebSocket for live updates (only if run is still in progress)
         if (r.status !== "completed" && r.status !== "failed") {
           connectWebSocket(runId);
