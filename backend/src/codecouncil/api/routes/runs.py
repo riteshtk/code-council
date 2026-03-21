@@ -513,19 +513,53 @@ async def get_events(
 
 @router.get("/runs/{run_id}/cost")
 async def get_cost(run_id: str, db: AsyncSession | None = Depends(get_db)) -> dict:
-    """Get cost breakdown for a run."""
-    live = _runs.get(run_id)
-    if live:
+    """Get cost breakdown for a run with per-agent token details."""
+
+    def _aggregate_events(events: list[dict]) -> dict:
+        by_agent: dict[str, dict] = {}
+        total_input = 0
+        total_output = 0
+        total_cost = 0.0
+
+        for e in events:
+            meta = e.get("metadata", {})
+            agent = e.get("agent", e.get("agent_id", "system"))
+            cost = meta.get("cost_usd", 0) or 0
+            inp = meta.get("input_tokens", 0) or 0
+            out = meta.get("output_tokens", 0) or 0
+
+            if agent not in by_agent:
+                by_agent[agent] = {
+                    "agent": agent,
+                    "provider": meta.get("provider", ""),
+                    "model": meta.get("model", ""),
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "cost_usd": 0,
+                    "calls": 0,
+                }
+            by_agent[agent]["input_tokens"] += inp
+            by_agent[agent]["output_tokens"] += out
+            by_agent[agent]["cost_usd"] += cost
+            by_agent[agent]["calls"] += 1
+            total_input += inp
+            total_output += out
+            total_cost += cost
+
         return {
             "run_id": run_id,
-            "total_cost": live.get("cost_usd", 0) or 0,
-            "total_tokens": 0,
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "by_agent": {},
-            "by_phase": {},
+            "total_cost": total_cost,
+            "total_tokens": total_input + total_output,
+            "prompt_tokens": total_input,
+            "completion_tokens": total_output,
+            "by_agent": by_agent,
             "currency": "USD",
         }
+
+    live = _runs.get(run_id)
+    if live:
+        events = live.get("events", [])
+        return _aggregate_events(events)
 
     if db is not None:
         try:
@@ -535,16 +569,14 @@ async def get_cost(run_id: str, db: AsyncSession | None = Depends(get_db)) -> di
         repo = RunRepository(db)
         r = await repo.get_run(uid)
         if r is not None:
-            return {
-                "run_id": run_id,
-                "total_cost": r.total_cost_usd or 0,
-                "total_tokens": 0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "by_agent": {},
-                "by_phase": {},
-                "currency": "USD",
-            }
+            event_repo = EventRepository(db)
+            db_events = await event_repo.get_events_for_run(uid, limit=500)
+            events = [_orm_event_to_dict(e) for e in db_events]
+            result = _aggregate_events(events)
+            # Use DB total as fallback if event aggregation yields zero
+            if result["total_cost"] == 0 and (r.total_cost_usd or 0) > 0:
+                result["total_cost"] = r.total_cost_usd or 0
+            return result
 
     raise HTTPException(status_code=404, detail=f"Run '{run_id}' not found")
 

@@ -20,6 +20,7 @@ import {
   FileText,
   ExternalLink,
   AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import type { Phase } from "@/lib/types";
 
@@ -324,6 +325,22 @@ export default function DebatePage() {
           )}
         </div>
       </div>
+
+      {/* ═══════ COMPLETION SUMMARY ═══════ */}
+      {run?.status === "completed" && (
+        <div className="mx-4 mt-3 p-4 rounded-xl bg-[var(--cc-bg-card)] border border-[var(--cc-green)] border-opacity-30">
+          <div className="flex items-center gap-3 mb-2">
+            <CheckCircle2 className="w-5 h-5 text-[var(--cc-green)]" />
+            <span className="text-sm font-semibold text-[var(--cc-text)]">Analysis Complete</span>
+          </div>
+          <div className="flex gap-6 text-xs text-[var(--cc-text-muted)]">
+            <span>{findings.length} findings</span>
+            <span>{proposals.length} proposals ({proposals.filter(p => p.status === "accepted").length} passed)</span>
+            <span>Consensus: {run.consensus_score || 0}%</span>
+            <span>Cost: ${(run.total_cost || 0).toFixed(4)}</span>
+          </div>
+        </div>
+      )}
 
       {/* ═══════ MAIN 3-COLUMN GRID + BOTTOM ═══════ */}
       <div

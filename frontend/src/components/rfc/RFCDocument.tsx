@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { RunDetail } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
 import { getAgent } from "@/lib/constants";
@@ -53,7 +53,15 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
   const [appendixOpen, setAppendixOpen] = useState(false);
 
   const title = (rfcData?.title as string) || `RFC: ${run.repo?.url || run.id} Codebase Analysis`;
-  const summary = (rfcData?.summary as string) || "Automated codebase analysis by CodeCouncil multi-agent system.";
+
+  // Extract executive summary from markdown rfc_content if available
+  const summary = useMemo(() => {
+    if (rfcData?.rfc_content) {
+      const match = (rfcData.rfc_content as string).match(/##\s*Executive Summary\s*\n+([\s\S]*?)(?=\n##\s|\n#\s|$)/i);
+      if (match) return match[1].trim();
+    }
+    return rfcData?.summary as string || "Analysis by CodeCouncil multi-agent system.";
+  }, [rfcData]);
   const createdAt = new Date(run.created_at || Date.now()).toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
@@ -68,9 +76,10 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
         )
       : 0);
 
-  // Split proposals into passed, deadlocked, etc
-  const deadlockedProposals = run.proposals.filter((p) => p.status === "rejected");
-  const passedOrAmended = run.proposals.filter((p) => p.status !== "rejected");
+  // Split proposals into passed, deadlocked, and rejected
+  const deadlockedProposals = run.proposals.filter((p) => p.status === "deadlocked");
+  const rejectedProposals = run.proposals.filter((p) => p.status === "rejected");
+  const passedOrAmended = run.proposals.filter((p) => p.status !== "rejected" && p.status !== "deadlocked");
 
   // Unique agents
   const agentIds = [...new Set([
@@ -95,7 +104,8 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
         <div className="flex flex-wrap gap-4 mb-4 text-[13px]" style={{ color: "var(--cc-text-muted)" }}>
           <span>{createdAt}</span>
           <span>Run #{run.id.slice(0, 4)}</span>
-          <span>3 rounds</span>
+          <span>Topology: {(run as any).config_overrides?.topology || "Adversarial"}</span>
+          <span>{(run as any).config_overrides?.rounds || 3} rounds</span>
           <span>Total cost: ${totalCost.toFixed(2)}</span>
         </div>
         {consensusPercent > 0 && (
@@ -398,6 +408,61 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
         </section>
       )}
 
+      {/* ═══════ REJECTED PROPOSALS ═══════ */}
+      {rejectedProposals.length > 0 && (
+        <section className="mb-9" id="rejected">
+          <h2
+            className="text-xl font-bold mb-4 pb-2 border-b"
+            style={{ color: "var(--cc-text)", borderColor: "var(--cc-border)" }}
+          >
+            Rejected Proposals
+          </h2>
+          <div className="space-y-4">
+            {rejectedProposals.map((proposal) => {
+              const approveCount = proposal.votes.filter((v) => v.vote_type === "approve").length;
+              const rejectCount = proposal.votes.filter((v) => v.vote_type === "reject").length;
+
+              return (
+                <div
+                  key={proposal.id}
+                  className="rounded-[10px]"
+                  style={{
+                    padding: "20px 24px",
+                    backgroundColor: "rgba(255,107,107,0.04)",
+                    border: "1px solid rgba(255,107,107,0.2)",
+                  }}
+                >
+                  <span
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-bold mb-3"
+                    style={{
+                      backgroundColor: "rgba(255,107,107,0.15)",
+                      color: "var(--cc-red)",
+                    }}
+                  >
+                    REJECTED ({approveCount}-{rejectCount})
+                  </span>
+                  <h3
+                    className="text-base font-bold mb-2"
+                    style={{ color: "var(--cc-text)" }}
+                  >
+                    {proposal.title}
+                  </h3>
+                  <div
+                    className="text-sm leading-[1.7] mb-3"
+                    style={{ color: "var(--cc-text-secondary)" }}
+                  >
+                    {proposal.description}
+                  </div>
+                  {proposal.votes && proposal.votes.length > 0 && (
+                    <VoteMatrix votes={proposal.votes} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* ═══════ ACTION ITEMS ═══════ */}
       {run.proposals.length > 0 && (
         <section className="mb-9" id="actions">
@@ -410,43 +475,56 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
           <div className="space-y-2">
             {run.proposals
               .filter((p) => p.status === "accepted" || p.status === "amended")
-              .map((proposal, i) => (
-                <div
-                  key={proposal.id}
-                  className="flex gap-3 items-start rounded-lg border"
-                  style={{
-                    padding: "14px 18px",
-                    backgroundColor: "var(--cc-bg-card)",
-                    borderColor: "var(--cc-border)",
-                  }}
-                >
+              .map((proposal, i) => {
+                const effort = (proposal as unknown as { effort?: string }).effort || "M";
+                const effortStyle = EFFORT_STYLES[effort] || EFFORT_STYLES.M;
+                return (
                   <div
-                    className="w-7 h-7 rounded-md flex items-center justify-center text-[13px] font-bold text-white shrink-0"
-                    style={{ backgroundColor: "var(--cc-accent)" }}
+                    key={proposal.id}
+                    className="flex gap-3 items-start rounded-lg border"
+                    style={{
+                      padding: "14px 18px",
+                      backgroundColor: "var(--cc-bg-card)",
+                      borderColor: "var(--cc-border)",
+                    }}
                   >
-                    {i + 1}
-                  </div>
-                  <div className="flex-1">
                     <div
-                      className="text-sm font-semibold mb-1"
-                      style={{ color: "var(--cc-text)" }}
+                      className="w-7 h-7 rounded-md flex items-center justify-center text-[13px] font-bold text-white shrink-0"
+                      style={{ backgroundColor: "var(--cc-accent)" }}
                     >
-                      {proposal.title}
+                      {i + 1}
                     </div>
-                    <div className="flex gap-2">
-                      <span
-                        className="px-2 py-0.5 rounded text-[10px] font-semibold"
-                        style={{
-                          backgroundColor: "rgba(108,92,231,0.15)",
-                          color: "var(--cc-accent)",
-                        }}
+                    <div className="flex-1">
+                      <div
+                        className="text-sm font-semibold mb-1"
+                        style={{ color: "var(--cc-text)" }}
                       >
-                        From: {proposal.id}
-                      </span>
+                        {proposal.title}
+                      </div>
+                      <div className="flex gap-2">
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold"
+                          style={{
+                            backgroundColor: effortStyle.bg,
+                            color: effortStyle.color,
+                          }}
+                        >
+                          Effort: {effort}
+                        </span>
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold"
+                          style={{
+                            backgroundColor: "rgba(108,92,231,0.15)",
+                            color: "var(--cc-accent)",
+                          }}
+                        >
+                          {getDisplayName((proposal as any).agent_id || "")}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         </section>
       )}
@@ -550,7 +628,7 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
                 <span style={{ color: event.agent_id ? getAgentColor(event.agent_id) : "var(--cc-text-muted)" }}>
                   {event.agent_id || "System"}
                 </span>
-                : {JSON.stringify(event.payload || {})}
+                : {event.content || (event.payload as any)?.content || ""}
               </div>
             ))}
           </div>

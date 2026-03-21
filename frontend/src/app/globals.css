@@ -525,6 +525,51 @@ button[data-slot="button"][data-variant="ghost"]:hover {
   color: var(--cc-text-secondary);
 }
 
+/* RFC Document — larger, more readable */
+.prose-rfc {
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--cc-text);
+  max-width: 800px;
+}
+.prose-rfc h1 { font-size: 1.6em; font-weight: 700; margin-top: 1.2em; margin-bottom: 0.4em; color: var(--cc-text); }
+.prose-rfc h2 { font-size: 1.3em; font-weight: 700; margin-top: 1em; margin-bottom: 0.3em; color: var(--cc-text); border-bottom: 1px solid var(--cc-border); padding-bottom: 0.3em; }
+.prose-rfc h3 { font-size: 1.1em; font-weight: 600; margin-top: 0.8em; margin-bottom: 0.3em; color: var(--cc-text-secondary); }
+.prose-rfc p { margin: 0.5em 0; }
+.prose-rfc strong { color: var(--cc-text); }
+.prose-rfc blockquote {
+  border-left: 4px solid var(--cc-accent);
+  padding: 12px 16px;
+  margin: 1em 0;
+  background: var(--cc-bg-card);
+  border-radius: 0 8px 8px 0;
+  color: var(--cc-text);
+  font-size: 1.05em;
+  line-height: 1.7;
+}
+.prose-rfc ul, .prose-rfc ol { padding-left: 1.5em; margin: 0.5em 0; }
+.prose-rfc li { margin: 0.3em 0; }
+.prose-rfc code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--cc-bg-hover);
+  border: 1px solid var(--cc-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+  color: var(--cc-accent);
+}
+.prose-rfc pre { background: var(--cc-bg); border: 1px solid var(--cc-border); border-radius: 8px; padding: 12px 16px; margin: 0.8em 0; overflow-x: auto; }
+.prose-rfc pre code { background: none; border: none; padding: 0; color: var(--cc-text); }
+.prose-rfc table { width: 100%; border-collapse: collapse; margin: 0.8em 0; font-size: 0.93em; }
+.prose-rfc th, .prose-rfc td { border: 1px solid var(--cc-border); padding: 8px 12px; text-align: left; }
+.prose-rfc th { background: var(--cc-bg-hover); font-weight: 600; }
+.prose-rfc hr { border: none; border-top: 1px solid var(--cc-border); margin: 1.2em 0; }
+.prose-rfc a {
+  color: var(--cc-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 /* Agent panel sidebar — smaller markdown */
 .prose-agent-sm {
   font-size: 11px;
@@ -586,27 +631,28 @@ button[data-slot="button"][data-variant="ghost"]:hover {
   }
 
   /* Make content fill the page */
-  .prose-agent {
+  .prose-agent, .prose-rfc {
     color: #1a1a2e !important;
     max-width: 100% !important;
   }
-  .prose-agent h1, .prose-agent h2, .prose-agent h3 {
+  .prose-agent h1, .prose-agent h2, .prose-agent h3,
+  .prose-rfc h1, .prose-rfc h2, .prose-rfc h3 {
     color: #1a1a2e !important;
     page-break-after: avoid;
   }
-  .prose-agent code {
+  .prose-agent code, .prose-rfc code {
     background: #f0f0f5 !important;
     color: #333 !important;
     border-color: #ddd !important;
   }
-  .prose-agent pre {
+  .prose-agent pre, .prose-rfc pre {
     background: #f5f5fa !important;
     border-color: #ddd !important;
   }
-  .prose-agent table th {
+  .prose-agent table th, .prose-rfc table th {
     background: #f0f0f5 !important;
   }
-  .prose-agent blockquote {
+  .prose-agent blockquote, .prose-rfc blockquote {
     border-left-color: #6c5ce7 !important;
   }
 

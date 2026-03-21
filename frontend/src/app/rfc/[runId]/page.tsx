@@ -280,12 +280,11 @@ export default function RFCPage() {
         className="flex-1 min-h-0"
         style={{
           display: "grid",
-          gridTemplateColumns: viewMode === "document" && hasMarkdown ? "1fr" : "220px 1fr",
+          gridTemplateColumns: "220px 1fr",
         }}
       >
-        {/* SIDEBAR (only in structured view or when no markdown) */}
-        {(viewMode === "structured" || !hasMarkdown) && (
-          <aside
+        {/* SIDEBAR (always visible) */}
+        <aside
             className="border-r overflow-y-auto sticky top-0"
             style={{
               borderColor: "var(--cc-border)",
@@ -337,7 +336,6 @@ export default function RFCPage() {
               ))}
             </nav>
           </aside>
-        )}
 
         {/* CONTENT */}
         <div className="overflow-y-auto">
@@ -350,7 +348,7 @@ export default function RFCPage() {
           >
             {/* Document View: render markdown RFC */}
             {viewMode === "document" && hasMarkdown ? (
-              <article className="prose-agent">
+              <article className="prose-rfc">
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                   {rfcData!.rfc_content as string}
                 </ReactMarkdown>
