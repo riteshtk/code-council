@@ -13,8 +13,6 @@ import { CostMeter } from "@/components/debate/CostMeter";
 import { PhaseIndicator } from "@/components/debate/PhaseIndicator";
 import { HumanReviewPanel } from "@/components/debate/HumanReviewPanel";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Wifi,
   WifiOff,
@@ -27,11 +25,11 @@ import type { Phase } from "@/lib/types";
 
 const KNOWN_AGENTS = ["archaeologist", "skeptic", "visionary", "scribe"];
 
-const WS_STATUS_COLOR: Record<string, string> = {
-  connecting: "var(--cc-yellow)",
-  connected: "var(--cc-green)",
-  disconnected: "var(--cc-text-muted)",
-  error: "var(--cc-red)",
+const STATUS_PILL_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  running: { bg: "rgba(108,92,231,0.2)", color: "var(--cc-accent)", label: "DEBATING" },
+  completed: { bg: "rgba(0,214,143,0.2)", color: "var(--cc-green)", label: "COMPLETED" },
+  failed: { bg: "rgba(255,107,107,0.2)", color: "var(--cc-red)", label: "FAILED" },
+  pending: { bg: "rgba(136,136,160,0.2)", color: "var(--cc-text-muted)", label: "PENDING" },
 };
 
 export default function DebatePage() {
@@ -41,6 +39,7 @@ export default function DebatePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showHumanReview, setShowHumanReview] = useState(false);
+  const [elapsed, setElapsed] = useState("00:00");
 
   const {
     run,
@@ -72,35 +71,87 @@ export default function DebatePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runId]);
 
+  // Elapsed timer
+  useEffect(() => {
+    if (!run?.created_at) return;
+    const start = new Date(run.created_at).getTime();
+    const interval = setInterval(() => {
+      const diff = Math.floor((Date.now() - start) / 1000);
+      const m = Math.floor(diff / 60)
+        .toString()
+        .padStart(2, "0");
+      const s = (diff % 60).toString().padStart(2, "0");
+      setElapsed(`${m}:${s}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [run?.created_at]);
+
   // Detect HITL events
   useEffect(() => {
     const hasHITL = events.some((e) => e.type === "human_review_requested");
     if (hasHITL) setShowHumanReview(true);
   }, [events]);
 
+  // Helper to get event type/agent (handles both backend field naming conventions)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eType = (e: any) => e.type || e.event_type || "";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const eAgent = (e: any) => e.agent_id || e.agent || "";
+
+  // Is run completed?
+  const runCompleted = run?.status === "completed" || run?.status === "failed";
+
   // Track completed phases
   const completedPhases = useMemo<Phase[]>(() => {
     return events
-      .filter((e) => e.type === "phase_completed" && e.phase)
+      .filter((e) => eType(e) === "phase_completed" && e.phase)
       .map((e) => e.phase as Phase);
   }, [events]);
 
-  // Active agents (those currently thinking)
+  // Active agents — the most recently speaking agent (not system)
   const activeAgentIds = useMemo(() => {
-    const last = events.filter((e) => e.type === "agent_thinking");
-    if (last.length === 0) return new Set<string>();
-    const latest = last[last.length - 1];
-    return new Set([latest.agent_id].filter(Boolean) as string[]);
-  }, [events]);
+    if (runCompleted) return new Set<string>();
+    const agentSpeaking = events.filter((e) => {
+      const t = eType(e);
+      const a = eAgent(e);
+      return a && a !== "system" && ["agent_thinking", "agent_speaking", "agent_response", "agent_activated"].includes(t);
+    });
+    if (agentSpeaking.length === 0) return new Set<string>();
+    const latest = agentSpeaking[agentSpeaking.length - 1];
+    return new Set([eAgent(latest)].filter(Boolean));
+  }, [events, runCompleted]);
 
-  // Determine displayed agents from events + known agents
+  // Agent IDs — always show all 4 known agents
   const agentIds = useMemo(() => {
     const fromEvents = new Set(
-      events.map((e) => e.agent_id).filter(Boolean) as string[]
+      events.map((e) => eAgent(e)).filter((a) => a && a !== "system")
     );
     KNOWN_AGENTS.forEach((a) => fromEvents.add(a));
-    return [...fromEvents];
+    return KNOWN_AGENTS; // Fixed order
   }, [events]);
+
+  // Unique providers from events
+  const providers = useMemo(() => {
+    const provs = new Set<string>();
+    events.forEach((e) => {
+      const model = e.metadata?.model || (e.structured as Record<string, unknown>)?.model as string || (e.payload as Record<string, unknown>)?.model as string;
+      if (model) provs.add(model);
+    });
+    if (provs.size === 0) {
+      provs.add("GPT-4o");
+    }
+    return [...provs];
+  }, [events]);
+
+  // Round counter
+  const roundCount = useMemo(() => {
+    const debatePhaseEvents = events.filter(
+      (e) => eType(e) === "phase_started" && (e.phase === "debate" || e.phase === "debating")
+    );
+    return debatePhaseEvents.length || 1;
+  }, [events]);
+
+  const statusPill = STATUS_PILL_STYLES[run?.status || "pending"] || STATUS_PILL_STYLES.pending;
 
   if (loading) {
     return (
@@ -123,109 +174,141 @@ export default function DebatePage() {
         <p className="text-lg" style={{ color: "var(--cc-text)" }}>
           {error}
         </p>
-        <Button onClick={() => router.push("/")} variant="outline">
+        <button
+          onClick={() => router.push("/")}
+          className="px-4 py-2 rounded-lg border text-sm transition-all duration-200"
+          style={{
+            borderColor: "var(--cc-border)",
+            color: "var(--cc-text)",
+            backgroundColor: "var(--cc-bg-card)",
+          }}
+        >
           Back to Home
-        </Button>
+        </button>
       </div>
     );
   }
 
   return (
     <div
-      className="flex-1 flex flex-col gap-3 p-3 overflow-hidden"
-      style={{ backgroundColor: "var(--cc-bg)" }}
+      className="flex flex-col overflow-hidden"
+      style={{
+        backgroundColor: "var(--cc-bg)",
+        height: "calc(100vh - 56px)",
+      }}
     >
-      {/* Top bar */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h1
-                className="text-base font-semibold truncate"
-                style={{ color: "var(--cc-text)" }}
-              >
-                {run?.repo?.url || run?.repo?.local_path || runId}
-              </h1>
-              {run?.status && (
-                <Badge
-                  variant="outline"
-                  className="text-xs shrink-0"
-                  style={{
-                    color:
-                      run.status === "running"
-                        ? "var(--cc-yellow)"
-                        : run.status === "completed"
-                        ? "var(--cc-green)"
-                        : run.status === "failed"
-                        ? "var(--cc-red)"
-                        : "var(--cc-text-muted)",
-                  }}
-                >
-                  {run.status === "running" && (
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                  )}
-                  {run.status}
-                </Badge>
-              )}
-            </div>
-            <div className="text-xs mt-0.5" style={{ color: "var(--cc-text-muted)" }}>
-              Run ID: {runId}
-            </div>
+      {/* ═══════ TOP BAR ═══════ */}
+      <div
+        className="flex items-center justify-between px-5 py-2.5 border-b shrink-0"
+        style={{
+          borderColor: "var(--cc-border)",
+          backgroundColor: "rgba(8,8,13,0.95)",
+          backdropFilter: "blur(20px)",
+        }}
+      >
+        {/* Left: repo + status */}
+        <div className="flex items-center gap-4">
+          <div className="text-sm" style={{ color: "var(--cc-text-muted)" }}>
+            <span className="font-semibold" style={{ color: "var(--cc-text)" }}>
+              {run?.repo?.url || run?.repo?.local_path || runId}
+            </span>
           </div>
+          <span
+            className={`px-3 py-1 rounded-xl text-[11px] font-semibold uppercase tracking-wide ${
+              run?.status === "running" ? "animate-pulse-glow" : ""
+            }`}
+            style={{ backgroundColor: statusPill.bg, color: statusPill.color }}
+          >
+            {statusPill.label}
+          </span>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
-          {/* Phase indicator */}
+        {/* Center: phase indicator + round */}
+        <div className="flex items-center gap-5">
           <PhaseIndicator
             currentPhase={phase}
             completedPhases={completedPhases}
           />
+          <span
+            className="text-[13px] font-semibold"
+            style={{ color: "var(--cc-accent)" }}
+          >
+            Round {roundCount}/3
+          </span>
+        </div>
 
+        {/* Right: elapsed, cost, providers, WS, RFC link */}
+        <div className="flex items-center gap-4">
+          <span
+            className="text-xs font-mono"
+            style={{ color: "var(--cc-text-muted)" }}
+          >
+            {elapsed}
+          </span>
+          <CostMeter cost={cost} budgetLimit={undefined} />
+          <div className="flex gap-1">
+            {providers.map((p) => (
+              <span
+                key={p}
+                className="px-2 py-0.5 rounded text-[10px] border"
+                style={{
+                  backgroundColor: "var(--cc-bg-card)",
+                  borderColor: "var(--cc-border)",
+                  color: "var(--cc-text-muted)",
+                }}
+              >
+                {p}
+              </span>
+            ))}
+          </div>
           {/* WS status */}
           <div
-            className="flex items-center gap-1.5 text-xs"
-            style={{ color: WS_STATUS_COLOR[wsState] }}
+            className="flex items-center gap-1 text-xs"
+            style={{
+              color:
+                wsState === "connected"
+                  ? "var(--cc-green)"
+                  : wsState === "connecting"
+                  ? "var(--cc-yellow)"
+                  : "var(--cc-text-muted)",
+            }}
           >
             {wsState === "connected" ? (
-              <Wifi className="w-4 h-4" />
+              <Wifi className="w-3.5 h-3.5" />
             ) : wsState === "connecting" ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <WifiOff className="w-4 h-4" />
+              <WifiOff className="w-3.5 h-3.5" />
             )}
-            {wsState}
           </div>
-
-          {/* Cost */}
-          <CostMeter cost={cost} budgetLimit={undefined} />
-
-          {/* RFC link */}
           {run?.status === "completed" && (
-            <Link href={`/rfc/${runId}`}>
-              <Button
-                size="sm"
-                className="text-xs"
-                style={{ backgroundColor: "var(--cc-accent)", color: "white" }}
-              >
-                <FileText className="w-3 h-3 mr-1" />
-                View RFC
-                <ExternalLink className="w-3 h-3 ml-1" />
-              </Button>
+            <Link
+              href={`/rfc/${runId}`}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold text-white transition-all duration-200"
+              style={{ backgroundColor: "var(--cc-accent)" }}
+            >
+              <FileText className="w-3 h-3" />
+              View RFC
+              <ExternalLink className="w-3 h-3" />
             </Link>
           )}
         </div>
       </div>
 
-      {/* Graph */}
-      <GraphVisualizer
-        currentPhase={phase}
-        completedPhases={completedPhases}
-      />
-
-      {/* Main grid */}
-      <div className="flex-1 grid grid-cols-12 gap-3 min-h-0 overflow-hidden">
-        {/* Left: Agent panels */}
-        <div className="col-span-3 flex flex-col gap-2 overflow-y-auto">
+      {/* ═══════ MAIN 3-COLUMN GRID + BOTTOM ═══════ */}
+      <div
+        className="flex-1 min-h-0"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "260px 1fr 280px",
+          gridTemplateRows: "1fr auto",
+        }}
+      >
+        {/* LEFT: Agent Panels */}
+        <div
+          className="overflow-y-auto border-r flex flex-col"
+          style={{ borderColor: "var(--cc-border)" }}
+        >
           {agentIds.map((agentId) => (
             <AgentPanel
               key={agentId}
@@ -233,68 +316,41 @@ export default function DebatePage() {
               events={events}
               findings={findings}
               isActive={activeAgentIds.has(agentId)}
+              runCompleted={runCompleted}
             />
           ))}
         </div>
 
-        {/* Center: Debate feed */}
-        <div className="col-span-6 flex flex-col min-h-0">
+        {/* CENTER: Debate Feed */}
+        <div className="overflow-hidden flex flex-col p-4">
           <DebateFeed events={events} />
         </div>
 
-        {/* Right: Proposals + Stats */}
-        <div className="col-span-3 flex flex-col gap-3 overflow-y-auto">
-          {/* Finding summary */}
-          <div
-            className="rounded-lg border p-3"
-            style={{
-              backgroundColor: "var(--cc-bg-card)",
-              borderColor: "var(--cc-border)",
-            }}
-          >
-            <h3
-              className="text-xs font-medium mb-2"
-              style={{ color: "var(--cc-text-muted)" }}
-            >
-              Findings
-            </h3>
-            <div className="grid grid-cols-3 gap-2">
-              {(["critical", "high", "medium"] as const).map((sev) => {
-                const count = findings.filter((f) => f.severity === sev).length;
-                const colors: Record<string, string> = {
-                  critical: "var(--cc-red)",
-                  high: "#ff9500",
-                  medium: "var(--cc-yellow)",
-                };
-                return (
-                  <div key={sev} className="text-center">
-                    <div
-                      className="text-xl font-bold"
-                      style={{ color: colors[sev] }}
-                    >
-                      {count}
-                    </div>
-                    <div
-                      className="text-xs"
-                      style={{ color: "var(--cc-text-muted)" }}
-                    >
-                      {sev}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* HITL toggle */}
-          {showHumanReview && (
-            <HumanReviewPanel findings={findings.filter((f) => f.severity === "critical" || f.severity === "high")} />
-          )}
+        {/* RIGHT: Graph Visualizer */}
+        <div
+          className="border-l p-4 flex flex-col"
+          style={{ borderColor: "var(--cc-border)" }}
+        >
+          <GraphVisualizer
+            currentPhase={phase}
+            completedPhases={completedPhases}
+          />
         </div>
+
+        {/* BOTTOM: Proposal Tracker (spans all columns) */}
+        <ProposalTracker proposals={proposals} />
       </div>
 
-      {/* Bottom: Proposals */}
-      <ProposalTracker proposals={proposals} />
+      {/* HITL overlay */}
+      {showHumanReview && (
+        <div className="fixed bottom-4 right-4 w-96 z-50">
+          <HumanReviewPanel
+            findings={findings.filter(
+              (f) => f.severity === "critical" || f.severity === "high"
+            )}
+          />
+        </div>
+      )}
     </div>
   );
 }
