@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "next-themes";
 import { TopBar } from "@/components/shared/TopBar";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -36,15 +37,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} dark h-full`}>
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable} h-full`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans antialiased">
-        <TooltipProvider>
-          <TopBar />
-          <ErrorBoundary>
-            <main className="flex-1 flex flex-col">{children}</main>
-          </ErrorBoundary>
-          <Toaster />
-        </TooltipProvider>
+        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <TooltipProvider>
+            <TopBar />
+            <ErrorBoundary>
+              <main className="flex-1 flex flex-col">{children}</main>
+            </ErrorBoundary>
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

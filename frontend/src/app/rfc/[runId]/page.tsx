@@ -8,6 +8,7 @@ import remarkGfm from "remark-gfm";
 import { getRun, getRFC, rerunAnalysis } from "@/lib/api";
 import type { RunDetail } from "@/lib/types";
 import { RFCDocument } from "@/components/rfc/RFCDocument";
+import { RFCHeader } from "@/components/rfc/RFCHeader";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -42,7 +43,7 @@ export default function RFCPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState("header");
-  const [viewMode, setViewMode] = useState<"document" | "structured">("document");
+  const [viewMode, setViewMode] = useState<"document" | "structured">("structured");
 
   const hasMarkdown = Boolean(rfcData?.rfc_content);
 
@@ -163,7 +164,7 @@ export default function RFCPage() {
               {run.repo?.url || runId}
             </Link>
             {" / "}
-            <span style={{ color: "var(--cc-text)" }}>RFC</span>
+            <span style={{ color: "var(--cc-text)" }}>Request for Comments</span>
           </div>
         </div>
         {/* Right: view toggle + export buttons */}
@@ -175,16 +176,6 @@ export default function RFCPage() {
               style={{ borderColor: "var(--cc-border)" }}
             >
               <button
-                onClick={() => setViewMode("document")}
-                className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
-                style={{
-                  backgroundColor: viewMode === "document" ? "var(--cc-accent)" : "var(--cc-bg-card)",
-                  color: viewMode === "document" ? "#fff" : "var(--cc-text-muted)",
-                }}
-              >
-                Document View
-              </button>
-              <button
                 onClick={() => setViewMode("structured")}
                 className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
                 style={{
@@ -193,6 +184,16 @@ export default function RFCPage() {
                 }}
               >
                 Structured View
+              </button>
+              <button
+                onClick={() => setViewMode("document")}
+                className="px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
+                style={{
+                  backgroundColor: viewMode === "document" ? "var(--cc-accent)" : "var(--cc-bg-card)",
+                  color: viewMode === "document" ? "#fff" : "var(--cc-text-muted)",
+                }}
+              >
+                Document View
               </button>
             </div>
           )}
@@ -339,11 +340,15 @@ export default function RFCPage() {
 
         {/* CONTENT */}
         <div className="overflow-y-auto">
+          {/* Rich header — full width */}
+          <div style={{ padding: "40px 48px 0" }}>
+            <RFCHeader run={run} rfcData={rfcData ?? undefined} />
+          </div>
+
+          {/* Document / Structured content — full width */}
           <div
-            className="mx-auto"
             style={{
-              maxWidth: "860px",
-              padding: "40px 48px 80px",
+              padding: "0 48px 80px",
             }}
           >
             {/* Document View: render markdown RFC */}

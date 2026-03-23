@@ -2,21 +2,21 @@
 
 import type { Vote } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
-import { ThumbsUp, ThumbsDown, Minus, Edit3 } from "lucide-react";
 
-const VOTE_ICONS = {
-  approve: ThumbsUp,
-  reject: ThumbsDown,
-  abstain: Minus,
-  amend: Edit3,
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  archaeologist: "Archaeologist",
+  skeptic: "Skeptic",
+  visionary: "Visionary",
+  scribe: "Scribe",
 };
 
-const VOTE_COLORS: Record<string, string> = {
-  approve: "var(--cc-green)",
-  reject: "var(--cc-red)",
-  abstain: "var(--cc-text-muted)",
-  amend: "var(--cc-yellow)",
-};
+function getDisplayName(agentId: string): string {
+  const lower = agentId.toLowerCase();
+  for (const [key, val] of Object.entries(AGENT_DISPLAY_NAMES)) {
+    if (lower.includes(key)) return val;
+  }
+  return agentId;
+}
 
 interface VoteMatrixProps {
   votes: Vote[];
@@ -27,30 +27,50 @@ export function VoteMatrix({ votes, agentIds }: VoteMatrixProps) {
   const agents = agentIds || [...new Set(votes.map((v) => v.agent_id))];
 
   return (
-    <div className="flex flex-wrap gap-2">
+    <div className="flex gap-3 mb-3">
       {agents.map((agentId) => {
         const vote = votes.find((v) => v.agent_id === agentId);
         const agentColor = getAgentColor(agentId);
         const voteType = vote?.vote_type || "abstain";
-        const voteColor = VOTE_COLORS[voteType];
-        const Icon = VOTE_ICONS[voteType as keyof typeof VOTE_ICONS] || Minus;
+        const isYes = voteType === "approve";
+        const isNo = voteType === "reject";
+        const displayName = getDisplayName(agentId);
+        const confidence = (vote as unknown as { confidence?: number })?.confidence;
 
         return (
           <div
             key={agentId}
-            className="flex items-center gap-2 px-2 py-1.5 rounded border text-xs"
-            style={{
-              backgroundColor: `${voteColor}11`,
-              borderColor: agentColor,
-            }}
-            title={vote?.reasoning || voteType}
+            className={`flex flex-col items-center gap-1 px-4 py-2.5 rounded-lg min-w-[90px] ${
+              isYes ? "yes-cell" : isNo ? "no-cell" : ""
+            }`}
+            style={{ backgroundColor: "var(--cc-bg)" }}
           >
-            <div
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: agentColor }}
-            />
-            <span style={{ color: "var(--cc-text)" }}>{agentId}</span>
-            <Icon className="w-3 h-3" style={{ color: voteColor }} />
+            <span
+              className="text-[11px] font-semibold"
+              style={{ color: agentColor }}
+            >
+              {displayName}
+            </span>
+            <span
+              className="text-base font-extrabold"
+              style={{
+                color: isYes
+                  ? "var(--cc-green)"
+                  : isNo
+                  ? "var(--cc-red)"
+                  : "var(--cc-text-muted)",
+              }}
+            >
+              {isYes ? "YES" : isNo ? "NO" : voteType.toUpperCase()}
+            </span>
+            {confidence != null && (
+              <span
+                className="text-[10px]"
+                style={{ color: "var(--cc-text-muted)" }}
+              >
+                Confidence: {confidence}
+              </span>
+            )}
           </div>
         );
       })}

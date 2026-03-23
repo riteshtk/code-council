@@ -40,3 +40,4 @@ pgdata/
 
 # Superpowers
 .superpowers/
+.claude/

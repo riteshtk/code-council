@@ -2,6 +2,12 @@
 
 AI agent council for codebase intelligence. Four permanent AI agents (Archaeologist, Skeptic, Visionary, Scribe) analyse repos, debate in real time, and produce institutional-grade RFCs.
 
+## Claude Code Settings
+
+- **ALWAYS use Opus 4.6** (`claude-opus-4-6`) — never use Sonnet for any task
+- All subagents/dispatched agents MUST use `model: "opus"` — no exceptions
+- Use venv for backend: `source backend/.venv/bin/activate`
+
 ## Project Structure
 
 - `backend/` — Python 3.12+ (FastAPI + LangGraph + SQLAlchemy async)

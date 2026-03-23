@@ -2,14 +2,28 @@
 
 import type { Vote } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  archaeologist: "Archaeologist",
+  skeptic: "Skeptic",
+  visionary: "Visionary",
+  scribe: "Scribe",
+};
+
+function getDisplayName(agentId: string): string {
+  const lower = agentId.toLowerCase();
+  for (const [key, val] of Object.entries(AGENT_DISPLAY_NAMES)) {
+    if (lower.includes(key)) return val;
+  }
+  return agentId;
+}
 
 interface DissentBlockProps {
   votes: Vote[];
   proposalTitle?: string;
 }
 
-export function DissentBlock({ votes, proposalTitle }: DissentBlockProps) {
+export function DissentBlock({ votes }: DissentBlockProps) {
   const dissenters = votes.filter(
     (v) => v.vote_type === "reject" || v.vote_type === "amend"
   );
@@ -17,70 +31,36 @@ export function DissentBlock({ votes, proposalTitle }: DissentBlockProps) {
   if (dissenters.length === 0) return null;
 
   return (
-    <div
-      className="rounded-lg border p-4 space-y-3"
-      style={{
-        backgroundColor: "#ffd93d11",
-        borderColor: "#ffd93d44",
-      }}
-    >
-      <div className="flex items-center gap-2">
-        <AlertTriangle className="w-4 h-4" style={{ color: "var(--cc-yellow)" }} />
-        <h4 className="text-sm font-medium" style={{ color: "var(--cc-yellow)" }}>
-          Dissenting Views
-          {proposalTitle && (
-            <span className="font-normal" style={{ color: "var(--cc-text-muted)" }}>
-              {" "}
-              — {proposalTitle}
-            </span>
-          )}
-        </h4>
-      </div>
-
-      <div className="space-y-2">
-        {dissenters.map((vote) => {
-          const agentColor = getAgentColor(vote.agent_id);
-          return (
+    <>
+      {dissenters.map((vote) => {
+        const displayName = getDisplayName(vote.agent_id);
+        return (
+          <div
+            key={vote.id}
+            className="rounded-lg mt-3"
+            style={{
+              padding: "14px 18px",
+              backgroundColor: "rgba(255,217,61,0.06)",
+              border: "1px solid rgba(255,217,61,0.2)",
+            }}
+          >
             <div
-              key={vote.id}
-              className="flex gap-3 p-3 rounded"
-              style={{ backgroundColor: "var(--cc-bg-card)" }}
+              className="text-xs font-bold mb-1.5 flex items-center gap-1.5"
+              style={{ color: "var(--cc-yellow)" }}
             >
-              <div
-                className="w-3 h-3 rounded-full mt-0.5 shrink-0"
-                style={{ backgroundColor: agentColor }}
-              />
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-medium" style={{ color: agentColor }}>
-                    {vote.agent_id}
-                  </span>
-                  <span
-                    className="text-xs px-1.5 py-0.5 rounded"
-                    style={{
-                      backgroundColor:
-                        vote.vote_type === "reject"
-                          ? "var(--cc-red)22"
-                          : "var(--cc-yellow)22",
-                      color:
-                        vote.vote_type === "reject"
-                          ? "var(--cc-red)"
-                          : "var(--cc-yellow)",
-                    }}
-                  >
-                    {vote.vote_type}
-                  </span>
-                </div>
-                {vote.reasoning && (
-                  <p className="text-xs leading-relaxed" style={{ color: "var(--cc-text-muted)" }}>
-                    {vote.reasoning}
-                  </p>
-                )}
-              </div>
+              Preserved Dissent &mdash; {displayName}
             </div>
-          );
-        })}
-      </div>
-    </div>
+            {vote.reasoning && (
+              <div
+                className="text-[13px] leading-relaxed italic"
+                style={{ color: "var(--cc-text)" }}
+              >
+                &ldquo;{vote.reasoning}&rdquo;
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
   );
 }

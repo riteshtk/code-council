@@ -17,26 +17,26 @@ function getEventBadge(type: string): { label: string; bgColor: string; textColo
   switch (type) {
     case "finding_created":
     case "finding_emitted":
-      return { label: "FINDING", bgColor: "rgba(255,107,107,0.15)", textColor: "var(--cc-red)" };
+      return { label: "FINDING", bgColor: "var(--cc-red-muted)", textColor: "var(--cc-red)" };
     case "proposal_created":
-      return { label: "PROPOSAL", bgColor: "rgba(108,92,231,0.2)", textColor: "var(--cc-accent)" };
+      return { label: "PROPOSAL", bgColor: "var(--cc-accent-muted)", textColor: "var(--cc-accent)" };
     case "vote_cast":
-      return { label: "VOTE", bgColor: "rgba(0,214,143,0.15)", textColor: "var(--cc-green)" };
+      return { label: "VOTE", bgColor: "var(--cc-green-muted)", textColor: "var(--cc-green)" };
     case "agent_thinking":
-      return { label: "THINKING", bgColor: "rgba(255,217,61,0.15)", textColor: "var(--cc-yellow)" };
+      return { label: "THINKING", bgColor: "var(--cc-yellow-muted)", textColor: "var(--cc-yellow)" };
     case "agent_response":
-      return { label: "RESPONSE", bgColor: "rgba(78,205,196,0.15)", textColor: "var(--cc-blue)" };
+      return { label: "RESPONSE", bgColor: "var(--cc-blue-muted)", textColor: "var(--cc-blue)" };
     case "phase_started":
     case "phase_completed":
-      return { label: "PHASE", bgColor: "rgba(136,136,160,0.15)", textColor: "var(--cc-text-muted)" };
+      return { label: "PHASE", bgColor: "var(--cc-bg-hover)", textColor: "var(--cc-text-muted)" };
     case "consensus_reached":
-      return { label: "CONSENSUS", bgColor: "rgba(0,214,143,0.2)", textColor: "var(--cc-green)" };
+      return { label: "CONSENSUS", bgColor: "var(--cc-green-muted)", textColor: "var(--cc-green)" };
     case "human_review_requested":
-      return { label: "REVIEW", bgColor: "rgba(255,150,0,0.15)", textColor: "#ff9500" };
+      return { label: "REVIEW", bgColor: "var(--cc-yellow-muted)", textColor: "var(--cc-yellow)" };
     case "error":
-      return { label: "ERROR", bgColor: "rgba(255,107,107,0.25)", textColor: "var(--cc-red)" };
+      return { label: "ERROR", bgColor: "var(--cc-red-muted)", textColor: "var(--cc-red)" };
     default:
-      return { label: type.toUpperCase().replace(/_/g, " "), bgColor: "rgba(136,136,160,0.15)", textColor: "var(--cc-text-muted)" };
+      return { label: type.toUpperCase().replace(/_/g, " "), bgColor: "var(--cc-bg-hover)", textColor: "var(--cc-text-muted)" };
   }
 }
 

@@ -141,7 +141,7 @@ export function GraphVisualizer({
                     ? phase.color
                     : "var(--cc-border)",
                   backgroundColor: isDone
-                    ? "rgba(0,214,143,0.06)"
+                    ? "var(--cc-green-muted)"
                     : isActive
                     ? `${phase.color}12`
                     : "transparent",
@@ -156,7 +156,7 @@ export function GraphVisualizer({
                   className="w-6 h-6 rounded-md flex items-center justify-center text-[11px] shrink-0 transition-all duration-500"
                   style={{
                     backgroundColor: isDone
-                      ? "rgba(0,214,143,0.15)"
+                      ? "var(--cc-green-muted)"
                       : isActive
                       ? `${phase.color}20`
                       : "var(--cc-bg-hover)",

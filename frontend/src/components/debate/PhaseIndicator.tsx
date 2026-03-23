@@ -1,7 +1,6 @@
 "use client";
 
 import type { Phase } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 const PHASES: Phase[] = [
   "ingestion",
@@ -12,13 +11,13 @@ const PHASES: Phase[] = [
   "output",
 ];
 
-const PHASE_COLORS: Record<Phase, string> = {
-  ingestion: "#4ecdc4",
-  analysis: "#d4a574",
-  debate: "#6c5ce7",
-  synthesis: "#00d68f",
-  review: "#ffd93d",
-  output: "#ff6b6b",
+const PHASE_LABELS: Record<Phase, string> = {
+  ingestion: "INGESTION",
+  analysis: "ANALYSIS",
+  debate: "DEBATE",
+  synthesis: "VOTING",
+  review: "SCRIBING",
+  output: "DONE",
 };
 
 interface PhaseIndicatorProps {
@@ -31,52 +30,61 @@ export function PhaseIndicator({
   completedPhases = [],
 }: PhaseIndicatorProps) {
   return (
-    <div className="flex items-center gap-1">
-      {PHASES.map((phase, i) => {
-        const isDone = completedPhases.includes(phase);
-        const isActive = currentPhase === phase;
-        const color = PHASE_COLORS[phase];
-
-        return (
-          <div key={phase} className="flex items-center">
-            {i > 0 && (
-              <div
-                className="h-px w-4"
-                style={{
-                  backgroundColor: isDone || isActive ? color : "var(--cc-border)",
-                }}
-              />
-            )}
-            <div className="relative flex items-center justify-center group">
-              <div
-                className={cn(
-                  "w-3 h-3 rounded-full transition-all",
-                  isActive && "scale-150"
-                )}
-                style={{
-                  backgroundColor: isActive
-                    ? color
-                    : isDone
-                    ? `${color}88`
-                    : "var(--cc-border)",
-                  boxShadow: isActive ? `0 0 8px ${color}` : "none",
-                }}
-              />
-              {/* Tooltip */}
-              <div
-                className="absolute bottom-full mb-1 px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10"
-                style={{
-                  backgroundColor: "var(--cc-bg-card)",
-                  color: isActive ? color : "var(--cc-text-muted)",
-                  border: `1px solid var(--cc-border)`,
-                }}
-              >
-                {phase}
-              </div>
-            </div>
-          </div>
-        );
-      })}
+    <div className="flex items-center gap-4">
+      {/* Phase dots */}
+      <div className="flex gap-1 items-center">
+        {PHASES.map((phase) => {
+          const isDone = completedPhases.includes(phase);
+          const isActive = currentPhase === phase;
+          return (
+            <div
+              key={phase}
+              className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                isActive ? "animate-pulse-glow" : ""
+              }`}
+              style={{
+                backgroundColor: isDone
+                  ? "var(--cc-green)"
+                  : isActive
+                  ? "var(--cc-accent)"
+                  : "var(--cc-border)",
+                boxShadow: isActive
+                  ? "0 0 8px var(--cc-accent-glow)"
+                  : "none",
+              }}
+            />
+          );
+        })}
+        {/* Phase label text */}
+        <span
+          className="text-xs ml-2 font-mono"
+          style={{ color: "var(--cc-text-muted)" }}
+        >
+          {PHASES.map((phase) => {
+            const isDone = completedPhases.includes(phase);
+            const isActive = currentPhase === phase;
+            if (isActive) {
+              return (
+                <span key={phase} className="font-bold" style={{ color: "var(--cc-text)" }}>
+                  {PHASE_LABELS[phase]}
+                </span>
+              );
+            }
+            if (isDone) {
+              return (
+                <span key={phase} style={{ color: "var(--cc-text-muted)" }}>
+                  {PHASE_LABELS[phase]}
+                </span>
+              );
+            }
+            return null;
+          }).filter(Boolean).reduce<React.ReactNode[]>((acc, el, i) => {
+            if (i > 0) acc.push(<span key={`sep-${i}`}> &rarr; </span>);
+            acc.push(el);
+            return acc;
+          }, [])}
+        </span>
+      </div>
     </div>
   );
 }

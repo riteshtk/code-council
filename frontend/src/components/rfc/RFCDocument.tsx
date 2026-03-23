@@ -52,8 +52,6 @@ interface RFCDocumentProps {
 export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
   const [appendixOpen, setAppendixOpen] = useState(false);
 
-  const title = (rfcData?.title as string) || `RFC: ${run.repo?.url || run.id} Codebase Analysis`;
-
   // Extract executive summary from markdown rfc_content if available
   const summary = useMemo(() => {
     if (rfcData?.rfc_content) {
@@ -62,11 +60,6 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
     }
     return rfcData?.summary as string || "Analysis by CodeCouncil multi-agent system.";
   }, [rfcData]);
-  const createdAt = new Date(run.created_at || Date.now()).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
 
   const totalCost = run.total_cost || run.cost?.total_cost || 0;
   const consensusPercent = (rfcData?.consensus_percent as number) ||
@@ -81,70 +74,8 @@ export function RFCDocument({ run, rfcData }: RFCDocumentProps) {
   const rejectedProposals = run.proposals.filter((p) => p.status === "rejected");
   const passedOrAmended = run.proposals.filter((p) => p.status !== "rejected" && p.status !== "deadlocked");
 
-  // Unique agents
-  const agentIds = [...new Set([
-    ...run.findings.map((f) => f.agent_id),
-    ...run.proposals.map((p) => p.agent_id),
-  ])];
-
   return (
     <article style={{ color: "var(--cc-text)" }}>
-      {/* ═══════ RFC HEADER ═══════ */}
-      <div
-        id="header"
-        className="mb-10 pb-8 border-b"
-        style={{ borderColor: "var(--cc-border)" }}
-      >
-        <h1
-          className="text-[32px] font-bold leading-tight mb-2"
-          style={{ color: "var(--cc-text)" }}
-        >
-          {title}
-        </h1>
-        <div className="flex flex-wrap gap-4 mb-4 text-[13px]" style={{ color: "var(--cc-text-muted)" }}>
-          <span>{createdAt}</span>
-          <span>Run #{run.id.slice(0, 4)}</span>
-          <span>Topology: {(run as any).config_overrides?.topology || "Adversarial"}</span>
-          <span>{(run as any).config_overrides?.rounds || 3} rounds</span>
-          <span>Total cost: ${totalCost.toFixed(2)}</span>
-        </div>
-        {consensusPercent > 0 && (
-          <span
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[13px] font-bold"
-            style={{
-              backgroundColor: consensusPercent >= 70
-                ? "rgba(0,214,143,0.15)"
-                : "rgba(255,217,61,0.15)",
-              color: consensusPercent >= 70 ? "var(--cc-green)" : "var(--cc-yellow)",
-            }}
-          >
-            Consensus: {consensusPercent}%
-          </span>
-        )}
-        {/* Agent chips */}
-        <div className="flex gap-2 mt-3">
-          {agentIds.map((agentId) => {
-            const color = getAgentColor(agentId);
-            return (
-              <span
-                key={agentId}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border"
-                style={{
-                  backgroundColor: "var(--cc-bg-card)",
-                  borderColor: "var(--cc-border)",
-                }}
-              >
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
-                {getDisplayName(agentId)}
-              </span>
-            );
-          })}
-        </div>
-      </div>
-
       {/* ═══════ EXECUTIVE SUMMARY ═══════ */}
       <section className="mb-9" id="summary">
         <h2

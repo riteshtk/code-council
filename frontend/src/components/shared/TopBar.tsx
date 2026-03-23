@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Home, Settings, History } from "lucide-react";
 import { Logo } from "./Logo";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_LINKS = [
   { href: "/", label: "Home", icon: Home },
@@ -51,6 +52,7 @@ export function TopBar() {
 
         {/* Status */}
         <div className="flex items-center gap-3">
+          <ThemeToggle />
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--cc-bg-elevated)] border border-[var(--cc-border)]">
             <div className="w-2 h-2 rounded-full bg-[var(--cc-green)] animate-pulse-glow" />
             <span className="text-xs font-medium text-[var(--cc-text-secondary)]">Online</span>

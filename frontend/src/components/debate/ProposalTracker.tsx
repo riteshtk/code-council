@@ -4,23 +4,23 @@ import type { Proposal } from "@/lib/types";
 import { getAgentColor } from "@/lib/utils";
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-  pending: { bg: "rgba(136,136,160,0.15)", color: "var(--cc-text-muted)", label: "PENDING" },
-  voting: { bg: "rgba(108,92,231,0.2)", color: "var(--cc-accent)", label: "VOTING" },
-  accepted: { bg: "rgba(0,214,143,0.2)", color: "var(--cc-green)", label: "PASSED" },
-  rejected: { bg: "rgba(255,107,107,0.2)", color: "var(--cc-red)", label: "REJECTED" },
-  amended: { bg: "rgba(255,217,61,0.2)", color: "var(--cc-yellow)", label: "REVISED" },
-  proposed: { bg: "rgba(108,92,231,0.15)", color: "var(--cc-accent)", label: "PROPOSED" },
-  revised: { bg: "rgba(255,217,61,0.2)", color: "var(--cc-yellow)", label: "REVISED" },
-  withdrawn: { bg: "rgba(136,136,160,0.15)", color: "var(--cc-text-muted)", label: "WITHDRAWN" },
-  deadlocked: { bg: "rgba(255,107,107,0.15)", color: "var(--cc-red)", label: "DEADLOCKED" },
+  pending: { bg: "var(--cc-bg-hover)", color: "var(--cc-text-muted)", label: "PENDING" },
+  voting: { bg: "var(--cc-accent-muted)", color: "var(--cc-accent)", label: "VOTING" },
+  accepted: { bg: "var(--cc-green-muted)", color: "var(--cc-green)", label: "PASSED" },
+  rejected: { bg: "var(--cc-red-muted)", color: "var(--cc-red)", label: "REJECTED" },
+  amended: { bg: "var(--cc-yellow-muted)", color: "var(--cc-yellow)", label: "REVISED" },
+  proposed: { bg: "var(--cc-accent-muted)", color: "var(--cc-accent)", label: "PROPOSED" },
+  revised: { bg: "var(--cc-yellow-muted)", color: "var(--cc-yellow)", label: "REVISED" },
+  withdrawn: { bg: "var(--cc-bg-hover)", color: "var(--cc-text-muted)", label: "WITHDRAWN" },
+  deadlocked: { bg: "var(--cc-red-muted)", color: "var(--cc-red)", label: "DEADLOCKED" },
 };
 
 const EFFORT_STYLES: Record<string, { bg: string; color: string }> = {
-  XS: { bg: "rgba(0,214,143,0.15)", color: "var(--cc-green)" },
-  S: { bg: "rgba(0,214,143,0.15)", color: "var(--cc-green)" },
-  M: { bg: "rgba(255,217,61,0.15)", color: "var(--cc-yellow)" },
-  L: { bg: "rgba(255,107,107,0.15)", color: "var(--cc-red)" },
-  XL: { bg: "rgba(255,107,107,0.2)", color: "var(--cc-red)" },
+  XS: { bg: "var(--cc-green-muted)", color: "var(--cc-green)" },
+  S: { bg: "var(--cc-green-muted)", color: "var(--cc-green)" },
+  M: { bg: "var(--cc-yellow-muted)", color: "var(--cc-yellow)" },
+  L: { bg: "var(--cc-red-muted)", color: "var(--cc-red)" },
+  XL: { bg: "var(--cc-red-muted)", color: "var(--cc-red)" },
 };
 
 function ProposalCard({ proposal }: { proposal: Proposal }) {
@@ -101,10 +101,10 @@ function ProposalCard({ proposal }: { proposal: Proposal }) {
                 className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold"
                 style={{
                   backgroundColor: isYes
-                    ? "rgba(0,214,143,0.2)"
+                    ? "var(--cc-green-muted)"
                     : isNo
-                    ? "rgba(255,107,107,0.2)"
-                    : "rgba(136,136,160,0.2)",
+                    ? "var(--cc-red-muted)"
+                    : "var(--cc-bg-hover)",
                   color: isYes
                     ? "var(--cc-green)"
                     : isNo
